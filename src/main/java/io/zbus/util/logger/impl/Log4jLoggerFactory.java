@@ -20,100 +20,96 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.zbus.util.log.impl;
- 
+package io.zbus.util.logger.impl;
 
-import org.slf4j.spi.LocationAwareLogger;
+import org.apache.log4j.Level;
 
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory.InternalLoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory.InternalLoggerFactory;
 
-public class Sl4jLoggerFactory implements InternalLoggerFactory {
+public class Log4jLoggerFactory implements InternalLoggerFactory {
 	
 	public Logger getLogger(Class<?> clazz) {
-		return new Sl4jLogger(clazz);
+		return new Log4jLogger(clazz);
 	}
 	
 	public Logger getLogger(String name) {
-		return new Sl4jLogger(name);
-	} 
-	
-	public static void main(String[] args){
-		Logger log = new Sl4jLogger(Sl4jLoggerFactory.class);
-		log.info("test");
+		return new Log4jLogger(name);
 	}
 }
 
-class Sl4jLogger extends Logger { 
-	private org.slf4j.Logger log; 
-	private final String FQCN = Sl4jLogger.class.getName();
+class Log4jLogger extends Logger { 
+	private org.apache.log4j.Logger log;
 	
-	Sl4jLogger(Class<?> clazz) { 
-		log = org.slf4j.LoggerFactory.getLogger(clazz);
+	private static final String callerFQCN = Log4jLogger.class.getName();
+	
+	Log4jLogger(Class<?> clazz) {
+		log = org.apache.log4j.Logger.getLogger(clazz);
 	}
 	
-	Sl4jLogger(String name) {
-		log = org.slf4j.LoggerFactory.getLogger(name);
+	Log4jLogger(String name) {
+		log = org.apache.log4j.Logger.getLogger(name);
 	}
 	
-	public void info(String message) { 
-		info(message, (Throwable)null);
+	public void debug(String format, Object... args){
+		String msg = String.format(format, args);
+		log.log(callerFQCN, Level.DEBUG, msg, null);
+	} 
+	
+	public void info(String format, Object... args){
+		String msg = String.format(format, args);
+		log.log(callerFQCN, Level.INFO, msg, null);
+	}
+	
+	public void warn(String format, Object... args){
+		String msg = String.format(format, args);
+		log.log(callerFQCN, Level.WARN, msg, null);
+	}
+	
+	public void error(String format, Object... args){
+		String msg = String.format(format, args);
+		log.log(callerFQCN, Level.ERROR, msg, null);
+	}
+	
+	
+	public void info(String message) {
+		log.log(callerFQCN, Level.INFO, message, null);
 	}
 	
 	public void info(String message, Throwable t) {
-		if (log instanceof LocationAwareLogger) {
-	        ((LocationAwareLogger) log).log(null, FQCN, 
-	        		LocationAwareLogger.INFO_INT, message, null, t);
-	    } else {
-	        log.info(message, t);
-	    } 
+		log.log(callerFQCN, Level.INFO, message, t);
 	}
 	
 	public void debug(String message) {
-		debug(message, (Throwable)null);
+		log.log(callerFQCN, Level.DEBUG, message, null);
 	}
 	
 	public void debug(String message, Throwable t) {
-		if (log instanceof LocationAwareLogger) {
-	        ((LocationAwareLogger) log).log(null, FQCN, 
-	        		LocationAwareLogger.DEBUG_INT, message, null, t);
-	    } else {
-	        log.debug(message, t);
-	    } 
+		log.log(callerFQCN, Level.DEBUG, message, t);
 	}
 	
 	public void warn(String message) {
-		warn(message, (Throwable)null);
+		log.log(callerFQCN, Level.WARN, message, null);
 	}
 	
 	public void warn(String message, Throwable t) {
-		if (log instanceof LocationAwareLogger) {
-	        ((LocationAwareLogger) log).log(null, FQCN, 
-	        		LocationAwareLogger.WARN_INT, message, null, t);
-	    } else {
-	        log.warn(message);
-	    } 
+		log.log(callerFQCN, Level.WARN, message, t);
 	}
 	
 	public void error(String message) {
-		error(message, (Throwable)null);
+		log.log(callerFQCN, Level.ERROR, message, null);
 	}
 	
 	public void error(String message, Throwable t) {
-		if (log instanceof LocationAwareLogger) {
-	        ((LocationAwareLogger) log).log(null, FQCN, 
-	        		LocationAwareLogger.ERROR_INT, message, null, t);
-	    } else {
-	        log.error(message);
-	    } 
+		log.log(callerFQCN, Level.ERROR, message, t);
 	}
 	
 	public void fatal(String message) {
-		error(message);
+		log.log(callerFQCN, Level.FATAL, message, null);
 	}
 	
 	public void fatal(String message, Throwable t) {
-		error(message, t);
+		log.log(callerFQCN, Level.FATAL, message, t);
 	}
 	
 	public boolean isDebugEnabled() {
@@ -125,29 +121,25 @@ class Sl4jLogger extends Logger {
 	}
 	
 	public boolean isWarnEnabled() {
-		return log.isWarnEnabled();
+		return log.isEnabledFor(Level.WARN);
 	}
 	
 	public boolean isErrorEnabled() {
-		return log.isErrorEnabled();
+		return log.isEnabledFor(Level.ERROR);
 	}
 	
 	public boolean isFatalEnabled() {
-		return log.isErrorEnabled();
+		return log.isEnabledFor(Level.FATAL);
 	}
 
 	@Override
 	public void trace(String message) {
-		trace(message, (Throwable)null);	}
+		log.log(callerFQCN, Level.TRACE, message, null);
+	}
 
 	@Override
 	public void trace(String message, Throwable t) {
-		if (log instanceof LocationAwareLogger) {
-	        ((LocationAwareLogger) log).log(null, FQCN, 
-	        		LocationAwareLogger.TRACE_INT, message, null, t);
-	    } else {
-	        log.error(message);
-	    } 
+		log.log(callerFQCN, Level.TRACE, message, t);
 	}
 
 	@Override

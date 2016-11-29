@@ -27,8 +27,8 @@ import io.zbus.net.CodecInitializer;
 import io.zbus.net.IoAdaptor;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Server;
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 
 public class TcpServer implements Server {
 	private static final Logger log = LoggerFactory.getLogger(TcpServer.class); 

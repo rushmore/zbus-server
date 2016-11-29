@@ -27,8 +27,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 import io.zbus.util.pool.ObjectFactory;
 import io.zbus.util.pool.Pool;
 import io.zbus.util.pool.PoolConfig;

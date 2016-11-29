@@ -1,4 +1,4 @@
-package io.zbus.mq.diskq;
+package io.zbus.mq.log;
 
 import java.io.Closeable;
 import java.io.File;
@@ -10,36 +10,33 @@ import java.nio.channels.FileChannel;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 
 /**
  * --[4] OffsetCount 
  * --[~1024] Extension 
- * --[24 bytes] -- Offset
- * 
+ * --[24 bytes] -- Offset 
  * 
  * @author Rushmore
  *
  */
 
 public class Index implements Closeable {
-	public static final String INDEX_SUFFIX = ".idx";
-	private static final Logger log = LoggerFactory.getLogger(Index.class);
-	
+	public static final String INDEX_SUFFIX = ".idx";   
 	public static final int OFFSET_SIZE = 20;
 	public static final int BLOCK_MAX_COUNT = 10240; 
-	public static final int INDEX_HEAD_SIZE = 1024; 
-	// Capacity: 10K Offset.
+	public static final int INDEX_HEAD_SIZE = 1024;  
 	public static final int INDEX_SIZE = INDEX_HEAD_SIZE + BLOCK_MAX_COUNT * OFFSET_SIZE; 
  
-	private volatile int blockCount = 0;
-	private volatile int writeOffset = 0;
-
+	private static final Logger log = LoggerFactory.getLogger(Index.class);
+	
+	private volatile int blockCount = 0; 
+	
 	private RandomAccessFile indexFile;
 	private FileChannel fileChannel;
 	private MappedByteBuffer buffer;
-	private File directory;
+	private File indexDir;
 
 	public Index(File dir, String indexFileName) {
 		if (indexFileName == null) {
@@ -48,9 +45,9 @@ public class Index implements Closeable {
 		if (indexFileName.length() > 127) {
 			throw new IllegalArgumentException("indexFileName: " + indexFileName + " longer than 127");
 		}
-		this.directory = dir;
+		this.indexDir = dir;
  
-		File file = new File(directory, indexFileName);
+		File file = new File(indexDir, indexFileName);
 		try {
 			if (file.exists()) {
 				this.indexFile = new RandomAccessFile(file, "rw");
@@ -64,8 +61,7 @@ public class Index implements Closeable {
 				buffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, INDEX_SIZE);
 				buffer = buffer.load();
 				buffer.position(0);
-				this.blockCount = buffer.getInt();
-				this.writeOffset = buffer.getInt();
+				this.blockCount = buffer.getInt(); 
 			} else {
 				File parent = file.getParentFile();
 				if(parent != null){ 
@@ -75,8 +71,7 @@ public class Index implements Closeable {
 				indexFile = new RandomAccessFile(file, "rw");
 				fileChannel = indexFile.getChannel();
 				buffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, INDEX_SIZE);
-				putBlockCount();
-				putWriteOffset();
+				putBlockCount(); 
 			}
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
@@ -87,27 +82,22 @@ public class Index implements Closeable {
 	public int getBlockCount() {
 		return blockCount;
 	}  
-	
-	public void updateWriteOffset(int offset){
-		buffer.position(4); 
-		buffer.putInt(offset);
-		this.writeOffset = offset;
-	}
 	 
+	public boolean isCurrentBlockFull(){
+		if(blockCount < 1) return false;
+		
+		buffer.position(INDEX_HEAD_SIZE + (blockCount-1)*OFFSET_SIZE + 16);
+		int endOffset = buffer.getInt();
+		return endOffset >= Block.MaxBlockSize;
+	}
+	
 	public Block buildWriteBlock() throws IOException{
-		if(blockCount < 1){
+		if(blockCount < 1 || isCurrentBlockFull()){
 			return createBlock();
 		}
 		
 		Offset offset = getOffset(blockCount-1);
-		Block block = new Block(new File(directory, blockName(offset.baseOffset)));
-		if(block.isFull()){ 
-			offset.endOffset = block.getWriteOffset(); 
-			writeOffset(blockCount-1, offset);
-			
-			block.close(); 
-			return createBlock();
-		}
+		Block block = new Block(new File(indexDir, blockName(offset.baseOffset))); 
 		return block;
 	}
 	
@@ -129,31 +119,27 @@ public class Index implements Closeable {
 		writeOffset(blockCount, offset);
 		
 		blockCount++;
-		putBlockCount();
-		writeOffset = 0;
-		putWriteOffset(); 
+		putBlockCount(); 
 		
-		Block block = new Block(new File(directory, blockName(offset.baseOffset)));
+		Block block = new Block(new File(indexDir, blockName(offset.baseOffset)));
 		return block;
 	}
 	
 	private String blockName(long baseOffset){
-		String blockFileName = String.format("%020d%s", baseOffset, Block.BLOCK_FILE_SUFFIX);
-		return blockFileName;
+		return String.format("%020d%s", baseOffset, Block.BLOCK_FILE_SUFFIX);
 	}
  
 	 
 	private void putBlockCount(){
 		buffer.position(0); 
 		buffer.putInt(blockCount);
-	}
-	
-	private void putWriteOffset(){
-		buffer.position(4); 
-		buffer.putInt(writeOffset);
-	}
+	} 
 
 	public Offset getOffset(int idx) {
+		if(idx < 0){
+			throw new IllegalArgumentException("idx = "+idx +", should >= 0");
+		}
+		
 		if(idx >= BLOCK_MAX_COUNT){
 			throw new IllegalArgumentException("idx = "+idx +", should not >="+BLOCK_MAX_COUNT);
 		}
@@ -166,7 +152,11 @@ public class Index implements Closeable {
 		offset.endOffset = buffer.getInt(); 
 		return offset;
 	}
-	 
+	
+	public void updateWriteOffset(int offset){  
+		buffer.position(INDEX_HEAD_SIZE + (blockCount-1)*OFFSET_SIZE + 16);
+		buffer.putInt(offset);
+	}
 
 	private void writeOffset(int idx, Offset offset) {
 		buffer.position(INDEX_HEAD_SIZE + idx * OFFSET_SIZE);

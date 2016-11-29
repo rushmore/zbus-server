@@ -28,8 +28,8 @@ import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker;
 import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory;
 import io.netty.handler.ssl.SslHandler;
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 
 /**
  * Object -- HttpRequest/HttpResponse(HttpMessage) Message -- Zbus Message

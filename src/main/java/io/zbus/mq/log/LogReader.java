@@ -1,4 +1,4 @@
-package io.zbus.mq.diskq;
+package io.zbus.mq.log;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
@@ -6,13 +6,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class BlockReader {
+public class LogReader {
 	private Block block;
 	private long readOffset = 0;
 	private final AtomicReference<CountDownLatch> newDataAvailable;
 	private final Lock readLock = new ReentrantLock();
 	
-	public BlockReader(Block block){
+	public LogReader(Block block){
 		this.block = block;
 		this.newDataAvailable = block.getNewDataAvailable();
 	}

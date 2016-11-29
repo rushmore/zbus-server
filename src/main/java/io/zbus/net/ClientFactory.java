@@ -3,8 +3,8 @@ package io.zbus.net;
 import java.io.Closeable;
 import java.io.IOException;
 
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 import io.zbus.util.pool.ObjectFactory;
 
 public abstract class ClientFactory<REQ, RES, T extends Client<REQ, RES>> 

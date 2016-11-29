@@ -27,8 +27,8 @@ import io.zbus.net.Sync;
 import io.zbus.net.Sync.Id;
 import io.zbus.net.Sync.ResultCallback;
 import io.zbus.net.Sync.Ticket;
-import io.zbus.util.log.Logger;
-import io.zbus.util.log.LoggerFactory;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 
 
 public class TcpClient<REQ extends Id, RES extends Id> implements Client<REQ, RES> {
