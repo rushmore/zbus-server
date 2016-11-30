@@ -6,21 +6,19 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Block implements Closeable {   
-	public static final String BLOCK_FILE_SUFFIX = ".zbus";
+public class Block implements Closeable {    
 	public static final long MaxBlockSize = Long.valueOf(System.getProperty("maxBlockSize", 64*1024*1024+"")); //default to 64M
 	
 	private volatile int writeOffset = 0; 
 	private RandomAccessFile file; 
-	 
-	private final Lock writeLock = new ReentrantLock(); 
-	private final AtomicReference<CountDownLatch> newDataAvailable = new AtomicReference<CountDownLatch>(new CountDownLatch(1));
+	private final Index index; 
+	private final Lock writeLock = new ReentrantLock();  
 	
-	public Block(File file, int writeOffset) throws FileNotFoundException{   
+	public Block(Index index, File file) throws FileNotFoundException{   
+		this.index = index;
 		if(!file.exists()){
 			File dir = file.getParentFile();
 			if(!dir.exists()){
@@ -28,30 +26,20 @@ public class Block implements Closeable {
 			}  
 		}  
 		this.file = new RandomAccessFile(file,"rw");  
-		this.writeOffset = writeOffset;
+		this.writeOffset = this.index.getWriteOffset();
 	}   
+	 
 	
-	public Block(File file) throws FileNotFoundException{ 
-		this(file, 0);
-	}
-	
-	public void offer(byte[] data) throws IOException{  
+	public void writeSafe(byte[] data) throws IOException{  
 		writeLock.lock();
 		try {  
-			write(data); 
-			newDataAvailable.get().countDown();
-			newDataAvailable.set(new CountDownLatch(1));
+			write(data);  
 		} finally {
 			writeLock.unlock();
 		}
-	}  
+	}   
 	
-	/**
-	 * nonthreadsafe
-	 * @param data
-	 * @throws IOException
-	 */
-	void write(byte[] data) throws IOException{  
+	public void write(byte[] data) throws IOException{  
 		if(writeOffset > MaxBlockSize){
 			throw new IOException("Block full");
 		}
@@ -60,9 +48,14 @@ public class Block implements Closeable {
 		file.writeInt(data.length);
 		file.write(data);
 		writeOffset += 8 + 4 + data.length;  
+		
+		index.updateWriteOffset(writeOffset);
+		
+		index.newDataAvailable.get().countDown();
+		index.newDataAvailable.set(new CountDownLatch(1));
 	} 
 
-    byte[] read(long pos) throws IOException{
+    public byte[] read(long pos) throws IOException{
 		file.seek(pos); 
 		file.readLong(); //offset 
 		int size = file.readInt();
@@ -78,17 +71,5 @@ public class Block implements Closeable {
 	@Override
 	public void close() throws IOException {  
 		this.file.close();
-	}
-	
-	public int getWriteOffset() {
-		return writeOffset;
-	}
-	 
-    RandomAccessFile getFile() {
-		return file;
-	}
-	
-    AtomicReference<CountDownLatch> getNewDataAvailable() {
-		return newDataAvailable;
 	} 
 }

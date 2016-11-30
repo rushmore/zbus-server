@@ -2,34 +2,43 @@ package io.zbus.mq.log;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class LogWriter { 
-	private Index index;
+	private final Index index;
 	private Block writeBlock;
-
+	private final Lock writeLock = new ReentrantLock(); 
+	
 	public LogWriter(File basePath, String queueName) throws IOException {
 		File queueFile = new File(basePath, queueName);
 		if (!queueFile.exists()) {
 			queueFile.mkdirs();
-		}
-		String indexFileName = queueName + Index.INDEX_SUFFIX;
-		index = new Index(queueFile, indexFileName); 
+		} 
+		index = new Index(queueFile); 
+		writeBlock = index.buildWriteBlock();
+	}
+	
+	public LogWriter(Index index) throws IOException {
+		this.index = index;
 		writeBlock = index.buildWriteBlock();
 	}
 	
 	public void write(byte[] data) throws IOException{
-		if(writeBlock.isFull()){
-			writeBlock.close();
-			writeBlock = index.buildWriteBlock();
+		writeLock.lock();
+		try{
+			if(writeBlock.isFull()){
+				writeBlock.close();
+				writeBlock = index.buildWriteBlock();
+			}
+			writeBlock.write(data); 
 		}
-		writeBlock.write(data);
-		index.updateWriteOffset(writeBlock.getWriteOffset()); 
+		finally {
+			writeLock.unlock();
+		}
 	}
-
-	public static void main(String[] args) throws Exception {
-		LogWriter q = new LogWriter(new File("/tmp"), "MyMQ");
-		for(int i=0;i<10000;i++){
-			q.write(new byte[1024*1024]);
-		}
+	
+	public Index getIndex() {
+		return index;
 	}
 }
