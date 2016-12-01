@@ -21,13 +21,13 @@ public class LogReader extends MappedFile {
 	
 	
 	@Override
-	public void loadDefaultData() throws IOException {
+	protected void loadDefaultData() throws IOException {
 		buffer.position(0);
 		this.readOffset = buffer.getLong(); 
 	}
 	
 	@Override
-	public void writeDefaultData() throws IOException {
+	protected void writeDefaultData() throws IOException {
 		this.readOffset = 0;
 		putReadOffset(); 
 	}

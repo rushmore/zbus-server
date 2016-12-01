@@ -22,7 +22,7 @@ public class MappedFile implements Closeable {
 	private RandomAccessFile diskFile;
 	private FileChannel fileChannel; 
 	
-	public void load(File file, int fileSize) { 
+	protected void load(File file, int fileSize) { 
 		try {
 			if (file.exists()) {
 				this.diskFile = new RandomAccessFile(file, "rw");
@@ -53,11 +53,11 @@ public class MappedFile implements Closeable {
 		}
 	}  
 	
-	public void loadDefaultData() throws IOException{
+	protected void loadDefaultData() throws IOException{
 		
 	}
 	
-	public void writeDefaultData() throws IOException{
+	protected void writeDefaultData() throws IOException{
 		
 	}
  

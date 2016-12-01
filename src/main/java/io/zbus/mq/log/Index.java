@@ -23,6 +23,7 @@ public class Index extends MappedFile {
 	public static final int BLOCK_MAX_COUNT = 10240; 
 	public static final int INDEX_HEAD_SIZE = 1024;  
 	public static final int INDEX_SIZE = INDEX_HEAD_SIZE + BLOCK_MAX_COUNT * OFFSET_SIZE;  
+	public static final long MAX_BLOCK_SIZE = 64*1024*1024; //default to 64M
 	 
 	private volatile int blockCount = 0;  
 	public final AtomicReference<CountDownLatch> newDataAvailable = new AtomicReference<CountDownLatch>(new CountDownLatch(1));; 
@@ -44,13 +45,13 @@ public class Index extends MappedFile {
 	} 
 	
 	@Override
-	public void loadDefaultData() throws IOException { 
+	protected void loadDefaultData() throws IOException { 
 		buffer.position(0);
 		this.blockCount = buffer.getInt(); 
 	}
 
 	@Override
-	public void writeDefaultData() throws IOException {
+	protected void writeDefaultData() throws IOException {
 		putBlockCount(); 
 	}
 	
@@ -141,7 +142,7 @@ public class Index extends MappedFile {
 		
 		buffer.position(INDEX_HEAD_SIZE + (blockCount-1)*OFFSET_SIZE + 16);
 		int endOffset = buffer.getInt();
-		return endOffset >= Block.MaxBlockSize;
+		return endOffset >= MAX_BLOCK_SIZE;
 	} 
 	 
 	private void putBlockCount(){

@@ -9,9 +9,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Block implements Closeable {    
-	public static final long MaxBlockSize = Long.valueOf(System.getProperty("maxBlockSize", 64*1024*1024+"")); //default to 64M
-	
+public class Block implements Closeable {     
 	private volatile int writeOffset = 0; 
 	private RandomAccessFile file; 
 	private final Index index; 
@@ -40,7 +38,7 @@ public class Block implements Closeable {
 	}   
 	
 	public void write(byte[] data) throws IOException{  
-		if(writeOffset > MaxBlockSize){
+		if(writeOffset > Index.MAX_BLOCK_SIZE){
 			throw new IOException("Block full");
 		}
 		file.seek(writeOffset);
@@ -65,7 +63,7 @@ public class Block implements Closeable {
 	}
     
     public boolean isFull(){
-    	return writeOffset >= MaxBlockSize;
+    	return writeOffset >= Index.MAX_BLOCK_SIZE;
     }
 	
 	@Override
