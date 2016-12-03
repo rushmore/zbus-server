@@ -15,6 +15,12 @@ public class Block implements Closeable {
 	private final Index index; 
 	private final Lock writeLock = new ReentrantLock();  
 	
+	/**
+	 * TODO add File parameter: sequential number
+	 * @param index
+	 * @param file
+	 * @throws FileNotFoundException
+	 */
 	public Block(Index index, File file) throws FileNotFoundException{   
 		this.index = index;
 		if(!file.exists()){
@@ -24,7 +30,7 @@ public class Block implements Closeable {
 			}  
 		}  
 		this.file = new RandomAccessFile(file,"rw");  
-		this.writeOffset = this.index.getWriteOffset();
+		this.writeOffset = this.index.readOffset();
 	}   
 	 
 	
@@ -38,7 +44,7 @@ public class Block implements Closeable {
 	}   
 	
 	public void write(byte[] data) throws IOException{  
-		if(writeOffset > Index.MAX_BLOCK_SIZE){
+		if(writeOffset > Index.BLOCK_MAX_SIZE){
 			throw new IOException("Block full");
 		}
 		file.seek(writeOffset);
@@ -47,13 +53,13 @@ public class Block implements Closeable {
 		file.write(data);
 		writeOffset += 8 + 4 + data.length;  
 		
-		index.updateWriteOffset(writeOffset);
+		index.writeOffset(writeOffset);
 		
 		index.newDataAvailable.get().countDown();
 		index.newDataAvailable.set(new CountDownLatch(1));
 	} 
 
-    public byte[] read(long pos) throws IOException{
+    public byte[] read(int pos) throws IOException{
 		file.seek(pos); 
 		file.readLong(); //offset 
 		int size = file.readInt();
@@ -63,7 +69,11 @@ public class Block implements Closeable {
 	}
     
     public boolean isFull(){
-    	return writeOffset >= Index.MAX_BLOCK_SIZE;
+    	return writeOffset >= Index.BLOCK_MAX_SIZE;
+    }
+    
+    public boolean isReadEnd(int offset){
+    	return offset >= writeOffset;
     }
 	
 	@Override

@@ -11,7 +11,7 @@ public class LogWriter {
 	
 	public LogWriter(Index index) throws IOException {
 		this.index = index;
-		writeBlock = index.buildWriteBlock();
+		writeBlock = index.createWriteBlock();
 	}
 	
 	public void write(byte[] data) throws IOException{
@@ -19,7 +19,7 @@ public class LogWriter {
 		try{
 			if(writeBlock.isFull()){
 				writeBlock.close();
-				writeBlock = index.buildWriteBlock();
+				writeBlock = index.createWriteBlock();
 			}
 			writeBlock.write(data); 
 		}
