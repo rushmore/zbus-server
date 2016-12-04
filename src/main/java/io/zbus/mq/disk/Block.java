@@ -1,4 +1,4 @@
-package io.zbus.mq.log;
+package io.zbus.mq.disk;
 
 import java.io.Closeable;
 import java.io.File;
@@ -9,28 +9,38 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Block implements Closeable {     
+class Block implements Closeable {     
 	private volatile int writeOffset = 0; 
 	private RandomAccessFile file; 
 	private final Index index; 
+	private final int blockNumber;
+	private boolean isEndOffset = false;
 	private final Lock writeLock = new ReentrantLock();  
-	
-	/**
-	 * TODO add File parameter: sequential number
-	 * @param index
-	 * @param file
-	 * @throws FileNotFoundException
-	 */
-	public Block(Index index, File file) throws FileNotFoundException{   
+	 
+	Block(Index index, File file, int blockNumber) throws FileNotFoundException{   
 		this.index = index;
+		this.blockNumber = blockNumber;
+		if(this.blockNumber < 0){
+			throw new IllegalArgumentException("blockNumber should>=0 but was " + blockNumber);
+		}
+		if(this.blockNumber >= index.getBlockCount()){
+			throw new IllegalArgumentException("blockNumber should<"+index.getBlockCount() + " but was " + blockNumber);
+		}
+		
 		if(!file.exists()){
 			File dir = file.getParentFile();
 			if(!dir.exists()){
 				dir.mkdirs();
 			}  
 		}  
+		
 		this.file = new RandomAccessFile(file,"rw");  
-		this.writeOffset = this.index.readOffset();
+		this.writeOffset = this.index.readOffset(this.blockNumber);
+		if(this.blockNumber < index.getBlockCount()){
+			isEndOffset = true;
+		} else {
+			isEndOffset = false;
+		}
 	}   
 	 
 	
@@ -73,9 +83,19 @@ public class Block implements Closeable {
     }
     
     public boolean isReadEnd(int offset){
-    	return offset >= writeOffset;
+    	if(index.getBlockCount() > this.blockNumber){
+    		if(!isEndOffset){
+    			this.writeOffset = index.readOffset(this.blockNumber);
+    		}
+    		return offset >= this.writeOffset;
+    	}
+    	return offset >= index.readOffset(this.blockNumber);
     }
 	
+    public int getBlockNumber() {
+		return blockNumber;
+	}
+    
 	@Override
 	public void close() throws IOException {  
 		this.file.close();

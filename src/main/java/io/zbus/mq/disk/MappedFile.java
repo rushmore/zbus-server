@@ -1,4 +1,4 @@
-package io.zbus.mq.log;
+package io.zbus.mq.disk;
 
 import java.io.Closeable;
 import java.io.File;

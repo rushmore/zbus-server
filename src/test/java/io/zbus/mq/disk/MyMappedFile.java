@@ -1,0 +1,73 @@
+package io.zbus.mq.disk;
+
+import java.io.File;
+import java.io.IOException;
+
+public class MyMappedFile extends MappedFile {
+	private int testData = 0;
+
+	public MyMappedFile(File file) {
+		load(file, 1024);
+	}
+
+	@Override
+	protected void loadDefaultData() throws IOException {
+		buffer.position(0);
+		testData = buffer.getInt();
+	}
+
+	@Override
+	protected void writeDefaultData() throws IOException {
+		buffer.position(0);
+		buffer.putInt(testData);
+
+	}
+	
+	public int getData(){
+		buffer.position(0);
+		return buffer.getInt();
+	}
+	
+	public void putData(int data){
+		this.testData = data;
+		buffer.position(0);
+		buffer.putInt(this.testData);
+	}
+
+	public static void main(String[] args) throws Exception {
+		for (int i = 0; i < 2; i++) {
+			Thread thread = new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					MyMappedFile file = new MyMappedFile(new File("/tmp/testdata"));
+					while (true) {
+						System.out.println(file.getData());
+						try {
+							Thread.sleep(200);
+						} catch (InterruptedException e) {
+							break;
+						}
+					}
+					try {
+						file.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			});
+			thread.start();
+		}
+		MyMappedFile file = new MyMappedFile(new File("/tmp/testdata"));
+		int i = 0;
+		while(true){
+			file.putData(++i);
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				break;
+			}
+		}
+		file.close();
+	}
+}

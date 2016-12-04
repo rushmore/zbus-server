@@ -1,6 +1,9 @@
-package io.zbus.mq.log;
+package io.zbus.mq.disk;
 
 import java.io.File;
+
+import io.zbus.mq.disk.Index;
+import io.zbus.mq.disk.QueueWriter;
 
 public class LogWriterTest {
 	
@@ -8,7 +11,7 @@ public class LogWriterTest {
 		
 		Index index = new Index(new File("/tmp/MyMQ"));
 		
-		LogWriter q = new LogWriter(index);
+		QueueWriter q = new QueueWriter(index);
 		
 		long start = System.currentTimeMillis();
 		for(int i=0;i<200000;i++){

@@ -1,15 +1,15 @@
-package io.zbus.mq.log;
+package io.zbus.mq.disk;
 
 import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class LogWriter { 
+public class QueueWriter { 
 	private final Index index;
 	private Block writeBlock;
 	private final Lock writeLock = new ReentrantLock();  
 	
-	public LogWriter(Index index) throws IOException {
+	public QueueWriter(Index index) throws IOException {
 		this.index = index;
 		writeBlock = index.createWriteBlock();
 	}

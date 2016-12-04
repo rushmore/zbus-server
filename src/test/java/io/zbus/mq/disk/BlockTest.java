@@ -1,4 +1,4 @@
-package io.zbus.mq.log;
+package io.zbus.mq.disk;
 
 public class BlockTest {
 	
