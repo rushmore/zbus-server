@@ -18,9 +18,9 @@ public class MappedFile implements Closeable {
 	private static final Logger log = LoggerFactory.getLogger(MappedFile.class); 
 	
 	protected MappedByteBuffer buffer;  
+	protected FileChannel fileChannel; 
 	
-	private RandomAccessFile diskFile;
-	private FileChannel fileChannel; 
+	private RandomAccessFile diskFile; 
 	
 	protected void load(File file, int fileSize) { 
 		try {

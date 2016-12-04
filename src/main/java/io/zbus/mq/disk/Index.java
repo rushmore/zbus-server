@@ -2,6 +2,7 @@ package io.zbus.mq.disk;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileLock;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -15,17 +16,17 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 
 public class Index extends MappedFile {
-	public static final String SUFFIX_INDEX = ".idx";  
-	public static final String SUFFIX_BLOCK = ".zbus";  
-	public static final String DIR_BLOCK    = "data"; 
-	public static final String DIR_READER   = "reader"; 
+	public static final String IndexSuffix = ".idx";  
+	public static final String BlockSuffix = ".zbus";  
+	public static final String BlockDir    = "data"; 
+	public static final String ReaderDir   = "reader"; 
 	
-	public static final int  BLOCK_MAX_COUNT = 10240; 
-	public static final long BLOCK_MAX_SIZE  = 64*1024*1024; //default to 64M
+	public static final int  BlockMaxCount = 10240; 
+	public static final long BlockMaxSize  = 64*1024*1024; //default to 64M
 	
-	public static final int OFFSET_SIZE     = 20;
-	public static final int INDEX_HEAD_SIZE = 1024;  
-	public static final int INDEX_SIZE      = INDEX_HEAD_SIZE + BLOCK_MAX_COUNT * OFFSET_SIZE;  
+	public static final int OffsetSize     = 20;
+	public static final int IndexHeadSize  = 1024;  
+	public static final int IndexSize      = IndexHeadSize + BlockMaxCount * OffsetSize;  
 	
 	 
 	private volatile int blockCount = 0;  
@@ -35,30 +36,37 @@ public class Index extends MappedFile {
 	
 	public Index(File dir) { 
 		this.indexDir = dir;   
-		File file = new File(indexDir, this.indexDir.getName() + SUFFIX_INDEX); 
-		load(file, INDEX_SIZE); 
+		File file = new File(indexDir, this.indexDir.getName() + IndexSuffix); 
+		load(file, IndexSize); 
 	}  
 	
-	public void writeOffset(int offset){  
-		buffer.position(INDEX_HEAD_SIZE + (blockCount-1)*OFFSET_SIZE + 16);
-		buffer.putInt(offset);
+	/**
+	 * Write endOffset of last block 
+	 * @param endOffset writable offset of last block
+	 * @throws IOException 
+	 */
+	public void writeEndOffset(int endOffset) throws IOException{  
+		FileLock lock = fileChannel.lock();
+		try {
+			buffer.position(IndexHeadSize + (blockCount-1)*OffsetSize + 16);
+			buffer.putInt(endOffset);
+		} finally {
+			lock.release();
+		} 
 	}
 	
-	public int readOffset(){
-		buffer.position(INDEX_HEAD_SIZE + (blockCount-1)*OFFSET_SIZE + 16);
-		return buffer.getInt();
-	}
-	
-	public int readOffset(int blockNumber){
-		if(blockNumber<0 || blockNumber>=blockCount){
-			throw new IllegalArgumentException("blockNumber=" + blockNumber + " should>=0 and <"+blockCount);
+	public int readEndOffset() throws IOException{
+		FileLock lock = fileChannel.lock();
+		try {
+			buffer.position(IndexHeadSize + (blockCount-1)*OffsetSize + 16);
+			return buffer.getInt();
+		} finally {
+			lock.release();
 		}
-		buffer.position(INDEX_HEAD_SIZE + (blockNumber)*OFFSET_SIZE + 16);
-		return buffer.getInt();
-	}
+	} 
 	
 	public Block createWriteBlock() throws IOException{
-		if(blockCount < 1 || isCurrentBlockFull()){
+		if(blockCount < 1 || isLastBlockFull()){
 			return createBlock();
 		}
 		
@@ -71,29 +79,46 @@ public class Index extends MappedFile {
 		if(blockCount < 1){
 			throw new IllegalStateException("No block to read");
 		}
-		if(blockNumber < 0 || blockNumber >= blockCount){
-			throw new IllegalArgumentException("blockNumber=" + blockNumber + " should be>=0 and <"+blockCount);
-		}
+		checkBlockNumber(blockNumber);
 		
 		Offset offset = getOffset(blockNumber);
 		Block block = new Block(this, blockFile(offset.baseOffset), blockNumber); 
 		return block;
+	}  
+	
+	public Offset getOffset(int blockNumber) {
+		checkBlockNumber(blockNumber);
+		
+		buffer.position(IndexHeadSize + blockNumber * OffsetSize);
+		
+		Offset offset = new Offset();
+		offset.createdTime = buffer.getLong();
+		offset.baseOffset = buffer.getLong(); 
+		offset.endOffset = buffer.getInt(); 
+		return offset;
 	}
 	
-	public int findBockIndex(long readOffset) throws IOException{
-		if(blockCount < 1){
-			throw new IllegalStateException("No block to read");
-		} 
-		 
+	private void checkBlockNumber(int blockNumber){ 
+		if(blockNumber < 0 ||  blockNumber >= blockCount){
+			throw new IllegalArgumentException("blockNumber should >=0 and <"+blockCount + ", but was " + blockNumber);
+		}
+	}
+	
+	/**
+	 * Search block number by totalOffset
+	 * @param readOffset offset from block 0, not the offset in the block.
+	 * @return block number the tottalOffset follows.
+	 * @throws IOException
+	 */
+	public int searchBlockNumber(long totalOffset) throws IOException{
 		for(int i=0; i<blockCount; i++){
 			Offset offset = getOffset(i);
-			if(readOffset >= offset.baseOffset && readOffset< offset.baseOffset+offset.endOffset){
+			if(totalOffset >= offset.baseOffset && totalOffset< offset.baseOffset+offset.endOffset){
 				return i;
 			}
-		}
-		throw new IllegalArgumentException("Offset=" + readOffset + " is not in range"); 
-	} 
-	
+		} 
+		return -1;
+	}  
 	
 	public File getIndexDir() {
 		return indexDir;
@@ -101,28 +126,16 @@ public class Index extends MappedFile {
 	
 	public int getBlockCount() {
 		return blockCount;
-	}    
-	
-	
-	@Override
-	protected void loadDefaultData() throws IOException { 
-		buffer.position(0);
-		this.blockCount = buffer.getInt(); 
-	}
-
-	@Override
-	protected void writeDefaultData() throws IOException {
-		writeBlockCount(); 
-	}
+	}     
 	
 	private File blockFile(long baseOffset){
-		String fileName = String.format("%020d%s", baseOffset, SUFFIX_BLOCK);
-		File blockDir = new File(indexDir, DIR_BLOCK);
+		String fileName = String.format("%020d%s", baseOffset, BlockSuffix);
+		File blockDir = new File(indexDir, BlockDir);
 		return new File(blockDir, fileName);
 	}
 
 	private void writeOffset(int blockNumber, Offset offset) {
-		buffer.position(INDEX_HEAD_SIZE + blockNumber * OFFSET_SIZE);
+		buffer.position(IndexHeadSize + blockNumber * OffsetSize);
 		
 		buffer.putLong(offset.createdTime);
 		buffer.putLong(offset.baseOffset);
@@ -130,7 +143,7 @@ public class Index extends MappedFile {
 	}    
 	
 	private Block createBlock() throws IOException{
-		if (blockCount >= BLOCK_MAX_COUNT) {
+		if (blockCount >= BlockMaxCount) {
 			throw new IllegalStateException("Offset table full");
 		}
 		long baseOffset = 0;
@@ -151,41 +164,33 @@ public class Index extends MappedFile {
 		
 		Block block = new Block(this, blockFile(offset.baseOffset), blockCount-1);
 		return block;
-	}
-	 
+	} 
  
-	private boolean isCurrentBlockFull(){
+	private boolean isLastBlockFull(){
 		if(blockCount < 1) return false;
 		
-		buffer.position(INDEX_HEAD_SIZE + (blockCount-1)*OFFSET_SIZE + 16);
+		buffer.position(IndexHeadSize + (blockCount-1)*OffsetSize + 16);
 		int endOffset = buffer.getInt();
-		return endOffset >= BLOCK_MAX_SIZE;
+		return endOffset >= BlockMaxSize;
 	} 
 	 
 	private void writeBlockCount(){
 		buffer.position(0); 
 		buffer.putInt(blockCount);
-	} 
-
-	Offset getOffset(int blockNumber) {
-		if(blockNumber < 0){
-			throw new IllegalArgumentException("blockNumber = "+blockNumber +", should >= 0");
-		}
-		
-		if(blockNumber >= BLOCK_MAX_COUNT){
-			throw new IllegalArgumentException("blockNumber = "+blockNumber +", should not >="+BLOCK_MAX_COUNT);
-		}
-		
-		buffer.position(INDEX_HEAD_SIZE + blockNumber * OFFSET_SIZE);
-		
-		Offset offset = new Offset();
-		offset.createdTime = buffer.getLong();
-		offset.baseOffset = buffer.getLong(); 
-		offset.endOffset = buffer.getInt(); 
-		return offset;
-	}
+	}  
 	
-	static class Offset {
+	@Override
+	protected void loadDefaultData() throws IOException { 
+		buffer.position(0);
+		this.blockCount = buffer.getInt(); 
+	}
+
+	@Override
+	protected void writeDefaultData() throws IOException {
+		writeBlockCount(); 
+	} 
+	
+	public static class Offset {
 		public long baseOffset;
 		public long createdTime;
 		public int endOffset; 

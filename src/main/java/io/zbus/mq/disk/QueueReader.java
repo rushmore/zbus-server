@@ -19,7 +19,7 @@ public class QueueReader extends MappedFile {
 	public QueueReader(Index index, String readerGroup) throws IOException{
 		this.index = index; 
 		this.readerGroup = readerGroup; 
-		File readerDir = new File(index.getIndexDir(), Index.DIR_READER);
+		File readerDir = new File(index.getIndexDir(), Index.ReaderDir);
 		File file = new File(readerDir, this.readerGroup);
 		
 		load(file, READER_FILE_SIZE); 
@@ -30,7 +30,7 @@ public class QueueReader extends MappedFile {
 	public byte[] read() throws IOException{
 		readLock.lock();
 		try{  
-			if(block.isReadEnd(this.offset)){ 
+			if(block.isEndOfBlock(this.offset)){ 
 				this.blockNumber++;
 				if(this.blockNumber >= index.getBlockCount()){
 					return null;
@@ -38,6 +38,31 @@ public class QueueReader extends MappedFile {
 				block = this.index.createReadBlock(this.blockNumber);
 				this.offset = 0;
 			}
+			byte[] data = block.read(offset);
+			this.offset += 12 + data.length;
+			writeOffset(); 
+			return data;
+		} finally {
+			readLock.unlock();
+		} 
+	}
+	
+	public byte[] blockingRead() throws IOException, InterruptedException{
+		readLock.lock();
+		try{  
+			if(block.isEndOfBlock(this.offset)){ 
+				if(block.isFull()){  
+					
+				} 
+				
+				if(this.blockNumber >= index.getBlockCount()-1){
+					index.newDataAvailable.get().await();
+				} 
+				
+				block = this.index.createReadBlock(this.blockNumber);
+				this.offset = 0;
+			}
+			
 			byte[] data = block.read(offset);
 			this.offset += 12 + data.length;
 			writeOffset(); 
