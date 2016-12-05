@@ -6,7 +6,7 @@ import java.io.IOException;
 public class MyMappedFile extends MappedFile {
 	private int testData = 0;
 
-	public MyMappedFile(File file) {
+	public MyMappedFile(File file) throws IOException {
 		load(file, 1024);
 	}
 
@@ -40,16 +40,16 @@ public class MyMappedFile extends MappedFile {
 
 				@Override
 				public void run() {
-					MyMappedFile file = new MyMappedFile(new File("/tmp/testdata"));
-					while (true) {
-						System.out.println(file.getData());
-						try {
-							Thread.sleep(200);
-						} catch (InterruptedException e) {
-							break;
-						}
-					}
 					try {
+						MyMappedFile file = new MyMappedFile(new File("/tmp/testdata"));
+						while (true) {
+							System.out.println(file.getData());
+							try {
+								Thread.sleep(200);
+							} catch (InterruptedException e) {
+								break;
+							}
+						} 
 						file.close();
 					} catch (IOException e) {
 						e.printStackTrace();

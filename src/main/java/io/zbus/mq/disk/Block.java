@@ -2,7 +2,6 @@ package io.zbus.mq.disk;
 
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.concurrent.CountDownLatch;
@@ -19,7 +18,7 @@ class Block implements Closeable {
 	
 	private RandomAccessFile diskFile;  
 	
-	Block(Index index, File file, int blockNumber) throws FileNotFoundException{   
+	Block(Index index, File file, int blockNumber) throws IOException{   
 		this.index = index;
 		this.blockNumber = blockNumber;
 		if(this.blockNumber < 0){
@@ -37,12 +36,14 @@ class Block implements Closeable {
 		}  
 		
 		this.diskFile = new RandomAccessFile(file,"rw");  
-		this.endOffset = index.getOffset(this.blockNumber).endOffset; 
-	}    
+		this.endOffset = index.readOffset(this.blockNumber).endOffset; 
+	}   
 	
-	public void write(byte[] data) throws IOException{  
+	
+	
+	public int write(byte[] data) throws IOException{
 		if(endOffset >= Index.BlockMaxSize){
-			throw new IOException("Block full");
+			return 0;
 		}
 		diskFile.seek(endOffset);
 		diskFile.writeLong(endOffset);
@@ -54,7 +55,8 @@ class Block implements Closeable {
 		
 		index.newDataAvailable.get().countDown();
 		index.newDataAvailable.set(new CountDownLatch(1));
-	} 
+		return data.length;
+	}  
 
 	
     public byte[] read(int pos) throws IOException{
@@ -78,9 +80,10 @@ class Block implements Closeable {
      * Check if offset reached the end, for read.
      * @param offset offset of reading
      * @return true if reached the end of block(available data), false otherwise
+     * @throws IOException 
      */
-    public boolean isEndOfBlock(int offset){  
-    	return offset >= index.getOffset(blockNumber).endOffset;
+    public boolean isEndOfBlock(int offset) throws IOException{  
+    	return offset >= index.readOffset(blockNumber).endOffset;
     }
 	
     public int getBlockNumber() {

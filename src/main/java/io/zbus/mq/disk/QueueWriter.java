@@ -16,12 +16,12 @@ public class QueueWriter {
 	
 	public void write(byte[] data) throws IOException{
 		writeLock.lock();
-		try{
-			if(writeBlock.isFull()){
+		try{ 
+			int count = writeBlock.write(data); 
+			if(count <= 0){
 				writeBlock.close();
 				writeBlock = index.createWriteBlock();
 			}
-			writeBlock.write(data); 
 		}
 		finally {
 			writeLock.unlock();

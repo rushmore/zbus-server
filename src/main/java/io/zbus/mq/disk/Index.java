@@ -2,9 +2,10 @@ package io.zbus.mq.disk;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.FileLock;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * --[4] OffsetCount 
@@ -33,8 +34,9 @@ public class Index extends MappedFile {
 	public final AtomicReference<CountDownLatch> newDataAvailable = new AtomicReference<CountDownLatch>(new CountDownLatch(1));; 
 	  
 	private File indexDir;  
+	private Lock lock = new ReentrantLock();
 	
-	public Index(File dir) { 
+	public Index(File dir) throws IOException { 
 		this.indexDir = dir;   
 		File file = new File(indexDir, this.indexDir.getName() + IndexSuffix); 
 		load(file, IndexSize); 
@@ -45,23 +47,23 @@ public class Index extends MappedFile {
 	 * @param endOffset writable offset of last block
 	 * @throws IOException 
 	 */
-	public void writeEndOffset(int endOffset) throws IOException{  
-		FileLock lock = fileChannel.lock();
+	public void writeEndOffset(int endOffset) throws IOException{   
 		try {
+			lock.lock();
 			buffer.position(IndexHeadSize + (blockCount-1)*OffsetSize + 16);
 			buffer.putInt(endOffset);
 		} finally {
-			lock.release();
+			lock.unlock();
 		} 
 	}
 	
-	public int readEndOffset() throws IOException{
-		FileLock lock = fileChannel.lock();
+	public int readEndOffset() throws IOException{ 
 		try {
+			lock.lock();
 			buffer.position(IndexHeadSize + (blockCount-1)*OffsetSize + 16);
 			return buffer.getInt();
 		} finally {
-			lock.release();
+			lock.unlock();
 		}
 	} 
 	
@@ -70,7 +72,7 @@ public class Index extends MappedFile {
 			return createBlock();
 		}
 		
-		Offset offset = getOffset(blockCount-1);
+		Offset offset = readOffset(blockCount-1);
 		Block block = new Block(this, blockFile(offset.baseOffset), blockCount-1); 
 		return block;
 	}
@@ -79,23 +81,31 @@ public class Index extends MappedFile {
 		if(blockCount < 1){
 			throw new IllegalStateException("No block to read");
 		}
-		checkBlockNumber(blockNumber);
+		checkBlockNumber(blockNumber); 
 		
-		Offset offset = getOffset(blockNumber);
+		Offset offset = readOffset(blockNumber);
 		Block block = new Block(this, blockFile(offset.baseOffset), blockNumber); 
 		return block;
 	}  
 	
-	public Offset getOffset(int blockNumber) {
-		checkBlockNumber(blockNumber);
-		
+	public Offset readOffset(int blockNumber) throws IOException {
+		checkBlockNumber(blockNumber); 
+		try {
+			lock.lock();
+			return readOffsetUnsafe(blockNumber); 
+		} finally {
+			lock.unlock();
+		} 
+	}
+	
+	private Offset readOffsetUnsafe(int blockNumber) throws IOException {  
 		buffer.position(IndexHeadSize + blockNumber * OffsetSize);
 		
 		Offset offset = new Offset();
 		offset.createdTime = buffer.getLong();
 		offset.baseOffset = buffer.getLong(); 
 		offset.endOffset = buffer.getInt(); 
-		return offset;
+		return offset; 
 	}
 	
 	private void checkBlockNumber(int blockNumber){ 
@@ -112,7 +122,7 @@ public class Index extends MappedFile {
 	 */
 	public int searchBlockNumber(long totalOffset) throws IOException{
 		for(int i=0; i<blockCount; i++){
-			Offset offset = getOffset(i);
+			Offset offset = readOffset(i);
 			if(totalOffset >= offset.baseOffset && totalOffset< offset.baseOffset+offset.endOffset){
 				return i;
 			}
@@ -146,24 +156,31 @@ public class Index extends MappedFile {
 		if (blockCount >= BlockMaxCount) {
 			throw new IllegalStateException("Offset table full");
 		}
+		 
 		long baseOffset = 0;
-		if(blockCount > 0){
-			Offset offset = getOffset(blockCount-1);
-			baseOffset = offset.baseOffset + offset.endOffset;
-		}
-		
-		Offset offset = new Offset(); 
-		offset.createdTime = System.currentTimeMillis();
-		offset.baseOffset = baseOffset;
-		offset.endOffset = 0;
-		
-		writeOffset(blockCount, offset);
-		
-		blockCount++;
-		writeBlockCount(); 
-		
-		Block block = new Block(this, blockFile(offset.baseOffset), blockCount-1);
-		return block;
+		try{
+			lock.lock(); 
+			
+			if(blockCount > 0){
+				Offset offset = readOffsetUnsafe(blockCount-1);
+				baseOffset = offset.baseOffset + offset.endOffset;
+			}
+			
+			Offset offset = new Offset();
+			offset.createdTime = System.currentTimeMillis();
+			offset.baseOffset = baseOffset;
+			offset.endOffset = 0;
+			
+			writeOffset(blockCount, offset);
+			
+			blockCount++;
+			writeBlockCount(); 
+			
+			Block block = new Block(this, blockFile(baseOffset), blockCount-1);
+			return block;
+		} finally{
+			lock.unlock();
+		}	 
 	} 
  
 	private boolean isLastBlockFull(){

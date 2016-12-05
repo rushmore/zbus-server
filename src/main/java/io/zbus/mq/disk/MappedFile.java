@@ -7,6 +7,7 @@ import java.io.RandomAccessFile;
 import java.lang.reflect.Method;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 
@@ -18,39 +19,43 @@ public class MappedFile implements Closeable {
 	private static final Logger log = LoggerFactory.getLogger(MappedFile.class); 
 	
 	protected MappedByteBuffer buffer;  
-	protected FileChannel fileChannel; 
+	protected FileChannel fileChannel;  
 	
 	private RandomAccessFile diskFile; 
 	
-	protected void load(File file, int fileSize) { 
-		try {
-			if (file.exists()) {
-				this.diskFile = new RandomAccessFile(file, "rw");
+	protected void load(File file, int fileSize) throws IOException { 
+		FileLock lock = null; 
+		try { 
+			boolean fileExits = file.exists();
+			if(!fileExits){
+				File parent = file.getParentFile();
+				if(parent != null && !parent.exists()){ 
+					parent.mkdirs();
+				}  
+			}  
+			
+			diskFile = new RandomAccessFile(file, "rw");
+			fileChannel = diskFile.getChannel();
+			buffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, fileSize).load(); 
+			
+			if (fileExits) { 
 				long size = diskFile.length();
 				if (size < fileSize) {
 					diskFile.setLength(fileSize);
 					diskFile.seek(size);
 					diskFile.write(new byte[(int) (fileSize - size)]);
-				}
-				fileChannel = diskFile.getChannel();
-				buffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, fileSize);
-				buffer = buffer.load(); 
+				} 
 				loadDefaultData();
-			} else {
-				File parent = file.getParentFile();
-				if(parent != null){ 
-					parent.mkdirs();
-				}  
-				diskFile = new RandomAccessFile(file, "rw");
-				fileChannel = diskFile.getChannel();
-				buffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, fileSize);  
+			} else { 
 				writeDefaultData();
 			}
 			 
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 			throw new IllegalArgumentException(e);
-		}
+		} finally {
+			if(lock != null) lock.release();
+		} 
 	}  
 	
 	protected void loadDefaultData() throws IOException{
@@ -59,9 +64,8 @@ public class MappedFile implements Closeable {
 	
 	protected void writeDefaultData() throws IOException{
 		
-	}
- 
-
+	} 
+	
 	@Override
 	public void close() throws IOException { 
 		if(buffer == null) return;
