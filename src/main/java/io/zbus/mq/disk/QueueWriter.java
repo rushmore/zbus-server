@@ -4,6 +4,13 @@ import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * QueueWriter should be only one instance for one Index.
+ * 
+ * 
+ * @author Rushmore
+ *
+ */
 public class QueueWriter { 
 	private final Index index;
 	private Block writeBlock;

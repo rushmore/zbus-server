@@ -45,33 +45,7 @@ public class QueueReader extends MappedFile {
 		} finally {
 			readLock.unlock();
 		} 
-	}
-	
-	public byte[] blockingRead() throws IOException, InterruptedException{
-		readLock.lock();
-		try{  
-			if(block.isEndOfBlock(this.offset)){ 
-				if(block.isFull()){  
-					
-				} 
-				
-				if(this.blockNumber >= index.getBlockCount()-1){
-					index.newDataAvailable.get().await();
-				} 
-				
-				block = this.index.createReadBlock(this.blockNumber);
-				this.offset = 0;
-			}
-			
-			byte[] data = block.read(offset);
-			this.offset += 12 + data.length;
-			writeOffset(); 
-			return data;
-		} finally {
-			readLock.unlock();
-		} 
-	}
-	
+	} 
 	
 	@Override
 	protected void loadDefaultData() throws IOException {

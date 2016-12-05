@@ -8,12 +8,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * --[4] OffsetCount 
- * --[~1024] Extension 
- * --[24 bytes] -- Offset 
+ * All public methods are threadsafe
  * 
- * @author Rushmore
- *
+ * @author Rushmore 
  */
 
 public class Index extends MappedFile {
@@ -67,13 +64,23 @@ public class Index extends MappedFile {
 		}
 	} 
 	
-	public Block createWriteBlock() throws IOException{
-		if(blockCount < 1 || isLastBlockFull()){
-			return createBlock();
-		}
+	public Block createWriteBlock() throws IOException{ 
+		Offset offset = null;
+		int blockNumber;
+		try{
+			lock.lock();  
+			if(blockCount < 1 || isLastBlockFull()){
+				blockNumber = blockCount;
+				offset = addNewOffset(); 
+			} else { 
+				blockNumber = blockCount - 1;
+				offset = readOffsetUnsafe(blockNumber); 
+			} 
+		} finally {
+			lock.unlock();
+		} 
 		
-		Offset offset = readOffset(blockCount-1);
-		Block block = new Block(this, blockFile(offset.baseOffset), blockCount-1); 
+		Block block = new Block(this, blockFile(offset.baseOffset), blockNumber); 
 		return block;
 	}
 	
@@ -97,6 +104,7 @@ public class Index extends MappedFile {
 			lock.unlock();
 		} 
 	}
+	
 	
 	private Offset readOffsetUnsafe(int blockNumber) throws IOException {  
 		buffer.position(IndexHeadSize + blockNumber * OffsetSize);
@@ -152,35 +160,28 @@ public class Index extends MappedFile {
 		buffer.putInt(offset.endOffset); 
 	}    
 	
-	private Block createBlock() throws IOException{
+	private Offset addNewOffset() throws IOException{
 		if (blockCount >= BlockMaxCount) {
 			throw new IllegalStateException("Offset table full");
 		}
 		 
-		long baseOffset = 0;
-		try{
-			lock.lock(); 
-			
-			if(blockCount > 0){
-				Offset offset = readOffsetUnsafe(blockCount-1);
-				baseOffset = offset.baseOffset + offset.endOffset;
-			}
-			
-			Offset offset = new Offset();
-			offset.createdTime = System.currentTimeMillis();
-			offset.baseOffset = baseOffset;
-			offset.endOffset = 0;
-			
-			writeOffset(blockCount, offset);
-			
-			blockCount++;
-			writeBlockCount(); 
-			
-			Block block = new Block(this, blockFile(baseOffset), blockCount-1);
-			return block;
-		} finally{
-			lock.unlock();
-		}	 
+		long baseOffset = 0;   
+		if(blockCount > 0){
+			Offset offset = readOffsetUnsafe(blockCount-1);
+			baseOffset = offset.baseOffset + offset.endOffset;
+		}
+		
+		Offset offset = new Offset();
+		offset.createdTime = System.currentTimeMillis();
+		offset.baseOffset = baseOffset;
+		offset.endOffset = 0;
+		
+		writeOffset(blockCount, offset);
+		
+		blockCount++;
+		writeBlockCount();   
+		
+		return offset;
 	} 
  
 	private boolean isLastBlockFull(){
@@ -207,7 +208,7 @@ public class Index extends MappedFile {
 		writeBlockCount(); 
 	} 
 	
-	public static class Offset {
+	public static class Offset { 
 		public long baseOffset;
 		public long createdTime;
 		public int endOffset; 
