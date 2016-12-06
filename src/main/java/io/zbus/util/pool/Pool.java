@@ -23,45 +23,57 @@
 package io.zbus.util.pool;
 
 import java.io.Closeable;
+import java.io.IOException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import io.zbus.util.pool.impl.DefaultPoolFactory;
 
-
-public abstract class Pool<T> implements Closeable { 
+public class Pool<T> implements Closeable { 
+	private ObjectFactory<T> factory;
+	private PoolConfig config;
 	
-	public abstract T borrowObject() throws Exception;
+	private BlockingQueue<T> queue = null;
+	private final int maxTotal;
+	private final AtomicInteger activeCount = new AtomicInteger(0);
 	
-	public abstract void returnObject(T obj);
-
-	public static <T> Pool<T> getPool(ObjectFactory<T> factory, PoolConfig config){
-		return Pool.factory.getPool(factory, config);
+	public Pool(ObjectFactory<T> factory, PoolConfig config) { 
+		this.factory = factory;
+		this.config = config;
+		
+		this.maxTotal = this.config.getMaxTotal();
+		this.queue = new ArrayBlockingQueue<T>(maxTotal);
 	}
 	
-	
-	private static PoolFactory factory;
-	
-	static {
-		initDefaultFactory();
-	} 
-	
-	public static void setPoolFactory(PoolFactory factory) {
-		if (factory != null) {
-			Pool.factory = factory;
+	@Override
+	public void close() throws IOException { 
+		T obj = null;
+		while((obj = queue.poll()) != null){
+			factory.destroyObject(obj);
 		}
 	}
-	
-	public static void initDefaultFactory() {
-		if (factory != null){
-			return ;
+ 
+	public T borrowObject() throws Exception { 
+		T  obj = null;
+		if(activeCount.get() >= maxTotal){
+			obj = queue.take();
+			return obj;
 		}
-		String defaultFactory = String.format("%s.impl.CommonsPool2Factory", Pool.class.getPackage().getName());
-		try {
-			//try commons-pool2
-			Class.forName("org.apache.commons.pool2.BasePooledObjectFactory");
-			Class<?> factoryClass = Class.forName(defaultFactory);
-			factory = (PoolFactory)factoryClass.newInstance();
-		} catch (Exception e) { 
-			factory = new DefaultPoolFactory();
+		obj = queue.poll();
+		if(obj != null) return obj;
+		
+		obj = factory.createObject();
+		activeCount.incrementAndGet(); 
+		
+		return obj; 
+	}
+ 
+	public void returnObject(T obj) { 
+		if(!factory.validateObject(obj)){
+			activeCount.decrementAndGet();
+			factory.destroyObject(obj); 
+			return;
 		}
+		queue.offer(obj);
 	}
 }
