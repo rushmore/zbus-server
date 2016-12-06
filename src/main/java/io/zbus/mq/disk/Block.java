@@ -5,6 +5,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Non-threadsafe
@@ -13,10 +15,10 @@ import java.util.concurrent.CountDownLatch;
  */
 class Block implements Closeable {  
 	private final Index index; 
-	private final int blockNumber;
-	private volatile int endOffset = 0; 
+	private final int blockNumber; 
 	
-	private RandomAccessFile diskFile;  
+	private RandomAccessFile diskFile; 
+	private final Lock lock = new ReentrantLock();  
 	
 	Block(Index index, File file, int blockNumber) throws IOException{   
 		this.index = index;
@@ -35,45 +37,57 @@ class Block implements Closeable {
 			}  
 		}  
 		
-		this.diskFile = new RandomAccessFile(file,"rw");  
-		this.endOffset = index.readOffset(this.blockNumber).endOffset; 
+		this.diskFile = new RandomAccessFile(file,"rw");   
 	}   
 	
 	
 	
 	public int write(byte[] data) throws IOException{
-		if(endOffset >= Index.BlockMaxSize){
-			return 0;
+		try{
+			lock.lock();
+			
+			int endOffset = endOffset();
+			if(endOffset >= Index.BlockMaxSize){
+				return 0;
+			}
+			diskFile.seek(endOffset);
+			diskFile.writeLong(endOffset);
+			diskFile.writeInt(data.length);
+			diskFile.write(data);
+			endOffset += 8 + 4 + data.length;  
+			
+			index.writeEndOffset(endOffset);
+			
+			index.newDataAvailable.get().countDown();
+			index.newDataAvailable.set(new CountDownLatch(1));
+			return data.length;
+		} finally {
+			lock.unlock();
 		}
-		diskFile.seek(endOffset);
-		diskFile.writeLong(endOffset);
-		diskFile.writeInt(data.length);
-		diskFile.write(data);
-		endOffset += 8 + 4 + data.length;  
-		
-		index.writeEndOffset(endOffset);
-		
-		index.newDataAvailable.get().countDown();
-		index.newDataAvailable.set(new CountDownLatch(1));
-		return data.length;
 	}  
 
 	
     public byte[] read(int pos) throws IOException{
-		diskFile.seek(pos); 
-		diskFile.readLong(); //offset 
-		int size = diskFile.readInt();
-		byte[] data = new byte[size];
-		diskFile.read(data, 0, size);
-		return data;
+    	try{
+			lock.lock();
+			diskFile.seek(pos); 
+			diskFile.readLong(); //offset 
+			int size = diskFile.readInt();
+			byte[] data = new byte[size];
+			diskFile.read(data, 0, size);
+			return data;
+    	} finally {
+			lock.unlock();
+		}
 	}
     
     /**
      * Check if endOffset of block reached max block size allowed
      * @return true if max block size reached, false other wise
+     * @throws IOException 
      */
-    public boolean isFull(){
-    	return endOffset >= Index.BlockMaxSize;
+    public boolean isFull() throws IOException{
+    	return endOffset() >= Index.BlockMaxSize;
     }
     
     /**
@@ -83,7 +97,11 @@ class Block implements Closeable {
      * @throws IOException 
      */
     public boolean isEndOfBlock(int offset) throws IOException{  
-    	return offset >= index.readOffset(blockNumber).endOffset;
+    	return offset >= endOffset();
+    }
+    
+    private int endOffset() throws IOException{
+    	return index.readOffset(blockNumber).endOffset;
     }
 	
     public int getBlockNumber() {

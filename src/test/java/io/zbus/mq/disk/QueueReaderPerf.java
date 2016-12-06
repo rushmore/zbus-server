@@ -5,7 +5,7 @@ import java.io.File;
 import io.zbus.mq.disk.Index;
 import io.zbus.mq.disk.QueueReader;
 
-public class QueueReaderTest {
+public class QueueReaderPerf {
 	
 	public static void main(String[] args) throws Exception {
 		Index index = new Index(new File("C:/tmp/MyMQ"));  

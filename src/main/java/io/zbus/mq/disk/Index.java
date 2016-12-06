@@ -9,6 +9,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * All public methods are threadsafe
+ * All private methods are non-threadsafe
  * 
  * @author Rushmore 
  */

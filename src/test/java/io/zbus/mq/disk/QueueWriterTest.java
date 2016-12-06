@@ -8,21 +8,21 @@ import io.zbus.mq.disk.QueueWriter;
 public class QueueWriterTest {
 	
 	public static void main(String[] args) throws Exception { 
-		Index index = new Index(new File("C:/tmp/MyMQ")); 
-		QueueWriter q = new QueueWriter(index);
+		Index index = new Index(new File("C:/tmp/StringQueue")); 
+		QueueWriter w = new QueueWriter(index);
 		
-		long start = System.currentTimeMillis();
-		
-		for(int i=0;i<200000;i++){
-			q.write(new byte[1024*1024]);
-			
-			if((i+1)%1000 == 0){
-				long end = System.currentTimeMillis();
-				System.out.format("%.2f M/s\n", 1000*1000.0/(end-start));
-				start = System.currentTimeMillis();
-			}
+		for(int i=0; i<0;i++){
+			w.write(new String("hello"+i).getBytes());
 		}
 		
+		QueueReader r = new QueueReader(index, "MyGroup4");
+		while(true){
+			byte[] data = r.read();
+			if(data == null) break;
+			System.out.println(new String(data));
+		}
+		
+		r.close();
 		index.close();
 	}
 	
