@@ -34,144 +34,142 @@ public class Message {
 	private Map<String, String> headers = new HashMap<String, String>();
 	private byte[] body;
 
-	public Message cmd(String value) {
-		return header(Cmd, value);
+	public void setCmd(String value) {
+		setHeader(Cmd, value);
 	}
 
-	public String cmd() {
-		return header(Cmd);
+	public String getCmd() {
+		return getHeader(Cmd);
 	}
 
-	public Message topic(String value) {
-		return header(Topic, value);
+	public String getTopic() {
+		return getHeader(Topic);
+	}
+	
+	public void setTopic(String value) {
+		setHeader(Topic, value);
+	} 
+
+	public String getGroup() {
+		return getHeader(Group);
 	}
 
-	public String topic() {
-		return header(Topic);
+	public void setGroup(String value) {
+		setHeader(Group, value);
 	}
 
-	public String group() {
-		return header(Group);
+	public String getAppId() {
+		return getHeader(AppId);
 	}
 
-	public Message group(String value) {
-		return header(Group, value);
+	public void setAppId(String value) {
+		setHeader(AppId, value);
 	}
 
-	public String appId() {
-		return header(AppId);
+	public String getToken() {
+		return getHeader(Token);
 	}
 
-	public Message appId(String value) {
-		return header(AppId, value);
+	public void setToken(String value) {
+		setHeader(Token, value);
 	}
 
-	public String token() {
-		return header(Token);
-	}
-
-	public Message token(String value) {
-		return header(Token, value);
-	}
-
-	public boolean ack() {
-		String value = header(Ack);
+	public boolean getAck() {
+		String value = getHeader(Ack);
 		return value == null ? false : Boolean.valueOf(value);
 	}
 
-	public Message ack(boolean value) {
-		return header(Ack, String.valueOf(value));
+	public void setAck(boolean value) {
+        setHeader(Ack, String.valueOf(value));
 	}
 
-	public String id() {
-		return header(Id);
+	public String getId() {
+		return getHeader(Id);
 	}
 
-	public Message id(String value) {
-		return header(Id, value);
+	public void setId(String value) {
+		setHeader(Id, value);
 	}
 
-	public String sender() {
-		return header(Sender);
+	public String getsender() {
+		return getHeader(Sender);
 	}
 
-	public Message sender(String value) {
-		return header(Sender, value);
+	public void setSender(String value) {
+	    setHeader(Sender, value);
 	}
 
-	public String receiver() {
-		return header(Receiver);
+	public String getReceiver() {
+		return getHeader(Receiver);
 	}
 
-	public Message receiver(String value) {
-		return header(Receiver, value);
+	public void setReceiver(String value) {
+		setHeader(Receiver, value);
 	}
 
-	public Integer window() {
-		String value = header(Window);
+	public Integer getWindow() {
+		String value = getHeader(Window);
 		return value == null ? null : Integer.valueOf(value);
 	}
 
-	public Message window(Integer value) {
-		return header(Window, String.valueOf(value));
+	public void setWindow(Integer value) {
+		setHeader(Window, String.valueOf(value));
 	}
 
-	public Integer batchSize() {
-		String value = header(BatchSize);
+	public Integer getBatchSize() {
+		String value = getHeader(BatchSize);
 		return value == null ? null : Integer.valueOf(value);
 	}
 
-	public Message batchSize(Integer value) {
-		return header(BatchSize, String.valueOf(value));
+	public void setBatchSize(Integer value) {
+		setHeader(BatchSize, String.valueOf(value));
 	}
 
-	public boolean batchInTx() {
-		String value = header(BatchInTx);
+	public boolean getBatchInTx() {
+		String value = getHeader(BatchInTx);
 		return value == null ? false : Boolean.valueOf(value);
 	}
 
-	public Message batchInTx(boolean value) {
-		return header(BatchInTx, String.valueOf(value));
+	public void setBatchInTx(boolean value) {
+		setHeader(BatchInTx, String.valueOf(value));
 	}
 
-	public Integer status() {
+	public Integer getStatus() {
 		return status;
 	}
 
-	public Message status(Integer value) {
-		this.status = value;
-		return this;
+	public void setStatus(Integer value) {
+		this.status = value; 
 	}
 
-	public String header(String key) {
+	public String getHeader(String key) {
 		if (!headers.containsKey(key))
 			return null;
 		return headers.get(key);
 	}
 
-	public Message header(String key, String value) {
-		headers.put(key, value);
-		return this;
+	public void setHeader(String key, String value) {
+		headers.put(key, value); 
 	}
 
-	public Map<String, String> headers() {
+	public Map<String, String> getHeaders() {
 		return headers;
 	}
 
-	public byte[] body() {
+	public byte[] getBody() {
 		return body;
 	}
 
-	public Message body(byte[] value) {
+	public Message setBody(byte[] value) {
 		this.body = value;
 		return this;
 	}
 
-	public Message body(String value) {
-		return body(value.getBytes());
+	public void setBody(String value) {
+		setBody(value.getBytes());
 	}
 
-	public Message body(String value, Charset charset) {
-		return body(value.getBytes(charset));
+	public void setBody(String value, Charset charset) {
+		setBody(value.getBytes(charset));
 	}
 }
