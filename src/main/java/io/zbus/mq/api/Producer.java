@@ -4,8 +4,8 @@ public class Producer extends MqAdmin{
 	
 	public Producer(Broker broker) {
 		super(broker); 
-	}
-
+	} 
+	
 	/**
 	 * Automatically do batch if enabled
 	 * 
@@ -14,7 +14,7 @@ public class Producer extends MqAdmin{
 	 * @param message
 	 * @return
 	 */
-	public Message put(Message message){  
+	public Message send(Message message){  
 		fillCtrlFileds(message);
 		
 		return broker.invoke(message);
@@ -33,5 +33,6 @@ public class Producer extends MqAdmin{
 		if(message.getToken() == null){
 			message.setToken(token);
 		}
-	}
+	} 
+
 }

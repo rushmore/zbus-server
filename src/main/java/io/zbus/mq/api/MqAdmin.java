@@ -6,8 +6,12 @@ public class MqAdmin{
 	protected final Broker broker; 
 	
 	protected String topic;
-	protected String appId = "";
-	protected String token = "";
+	protected String appId;
+	protected String token;
+	
+	protected MessageHandler dataHandler;
+	protected AckMessageHandler ackHandler;
+	protected CtrlMessageHandler ctrlHandler;
 	
 	public MqAdmin(Broker broker){  
 		this.broker = broker; 
@@ -51,5 +55,25 @@ public class MqAdmin{
 
 	public Broker getBroker() {
 		return broker;
+	}
+	
+	
+	public void onAck(AckMessageHandler handler){
+		ackHandler = handler;
+	}
+	
+	public void onData(MessageHandler handler){
+		dataHandler = handler;
 	} 
+	
+	public void onCtrl(CtrlMessageHandler handler){
+		ctrlHandler = handler;
+	} 
+	
+	public static interface AckMessageHandler {
+		void onAck(String msgId, Message message);
+	}
+	public static interface CtrlMessageHandler {
+		void onCtrl(String cmd, Message message);
+	}
 }

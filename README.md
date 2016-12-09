@@ -207,7 +207,7 @@ B ==> C (OnData)
 * [R] cmd = data
 * [R] id = {id}
 
-B ==> C (OnCommand)
+B ==> C (OnCtrl)
 * [R] cmd = exit
 
 Admin
