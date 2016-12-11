@@ -11,13 +11,9 @@ package io.zbus.mq.api;
  */
 public interface Consumer extends MqAdmin{ 
 	
-	Message take(int timeout);
+	Message take(int timeout); 
 	
-	void subscribe(String consumeGroup);
+	void applyFilter(String messageTag);
 	
-	void unsubscribe(String consumeGroup);
-	
-	void applyFilter(String tag);
-	
-	void removeFilter(String tag);    
+	void removeFilter(String messageTag);    
 }
