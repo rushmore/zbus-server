@@ -1,19 +1,14 @@
 package io.zbus.mq.api;
 
-import io.zbus.mq.api.MqAdmin.AckMessageHandler;
-import io.zbus.mq.api.MqAdmin.CtrlMessageHandler;
-
 public class ProducerExample {
 
 	public static void main(String[] args) { 
 		
-		Producer producer = new Producer(null);   
-		producer.setAppId("app-id");
-		producer.setToken("app-token");
+		Producer producer = null;
 		
-		producer.onData(new MessageHandler() {  
+		producer.onData(new DataMessageHandler() {  
 			@Override
-			public void onMessage(Message message) { 
+			public void onData(Message message) { 
 				
 			}
 		});
@@ -22,7 +17,7 @@ public class ProducerExample {
 			@Override
 			public void onAck(String msgId, Message message) { 
 				
-			}
+			} 
 		});
 		
 		producer.onCtrl(new CtrlMessageHandler() { 

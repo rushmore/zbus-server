@@ -9,38 +9,15 @@ package io.zbus.mq.api;
  * @author Rushmore
  *
  */
-public class Consumer extends MqAdmin{
-	protected Invoker invoker;
-	protected int maxInFlight = 1;
-	protected boolean deleteConsumeGroupOnExit = false;
-	protected boolean consumeGroupExclusive = false;
-	protected String consumeGroup = "";
+public interface Consumer extends MqAdmin{ 
 	
-	public Consumer(Broker broker) {
-		super(broker); 
-	}  
+	Message take(int timeout);
 	
-	public Message take(int timeout){
-		return null;
-	}
+	void subscribe(String consumeGroup);
 	
-	public void subscribe(String topic){
-		
-	}
+	void unsubscribe(String consumeGroup);
 	
-	public void unsubscribe(String topic){
-		
-	}
+	void applyFilter(String tag);
 	
-	public void onMessage(){
-		
-	}
-	
-	public void start(){
-		
-	}
-	
-	public void route(Message message){
-		
-	}
+	void removeFilter(String tag);    
 }

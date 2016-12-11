@@ -1,79 +1,47 @@
 package io.zbus.mq.api;
 
-import java.util.Map;
-
-public class MqAdmin{     
-	protected final Broker broker; 
+/**
+ * 
+ * Administrator to MQ, Topic/ConsumeGroup declare,remove, query
+ * 
+ * API works in asynchronous way. 
+ * Ack -- when ack message from zbus server
+ * Data -- when data message from zbus server
+ * Ctrl -- when control message from zbus server, such as exit command
+ * 
+ * @author Rushmore
+ *
+ */
+public interface MqAdmin{   
 	
-	protected String topic;
-	protected String appId;
-	protected String token;
+	MqFuture<Topic> declareTopic(TopicCtrl topic);
 	
-	protected MessageHandler dataHandler;
-	protected AckMessageHandler ackHandler;
-	protected CtrlMessageHandler ctrlHandler;
+	MqFuture<Boolean> removeTopic(String topicName); 
 	
-	public MqAdmin(Broker broker){  
-		this.broker = broker; 
-	}  
+	MqFuture<Topic> queryTopic(String topicName); 
+    
+	MqFuture<ConsumeGroup> declareConsumeGroup(ConsumeGroupCtrl group);
 	
-	public void declareTopic(String topic, Map<String, Object> properties){
-		
-	}
+	MqFuture<Boolean> removeConsumeGroup(String topicName, String groupName); 
 	
-	public void removeTopic(String topic){
-		
-	}
+	MqFuture<ConsumeGroup> queryConsumeGroup(String topicName, String groupName); 
+    
+	/**
+	 * Setup Ack Message handler, Ack message notified with request message id back
+	 * 
+	 * @param handler AckMessageHandler
+	 */
+    void onAck(AckMessageHandler handler);
+    /**
+     * 
+     * 
+     * @param handler
+     */
+	void onData(DataMessageHandler handler); 
 	
-	public void queryTopic(String topic){
-		
-	}
-
-	public String getTopic() {
-		return topic;
-	}
-
-	public void setTopic(String topic) {
-		this.topic = topic;
-	}
-
-	public String getAppId() {
-		return appId;
-	}
-
-	public void setAppId(String appId) {
-		this.appId = appId;
-	}
-
-	public String getToken() {
-		return token;
-	}
-
-	public void setToken(String token) {
-		this.token = token;
-	}
-
-	public Broker getBroker() {
-		return broker;
-	}
+	void onCtrl(CtrlMessageHandler handler); 
 	
+	void route(String peerId, Message message);
 	
-	public void onAck(AckMessageHandler handler){
-		ackHandler = handler;
-	}
-	
-	public void onData(MessageHandler handler){
-		dataHandler = handler;
-	} 
-	
-	public void onCtrl(CtrlMessageHandler handler){
-		ctrlHandler = handler;
-	} 
-	
-	public static interface AckMessageHandler {
-		void onAck(String msgId, Message message);
-	}
-	public static interface CtrlMessageHandler {
-		void onCtrl(String cmd, Message message);
-	}
+	void start();
 }
