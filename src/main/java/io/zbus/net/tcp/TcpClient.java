@@ -19,6 +19,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.zbus.mq.api.Message;
 import io.zbus.net.Client;
 import io.zbus.net.CodecInitializer;
 import io.zbus.net.IoDriver;
@@ -198,7 +199,7 @@ public class TcpClient<REQ extends Id, RES extends Id> implements Client<REQ, RE
 
 	@Override
 	public void connectSync(long timeout) throws IOException, InterruptedException {
-		if(hasConnected()) return; 
+		if(hasConnected()) return;  
 		
 		synchronized (this) {
 			if(!hasConnected()){ 
@@ -213,7 +214,7 @@ public class TcpClient<REQ extends Id, RES extends Id> implements Client<REQ, RE
 				cleanSession(); 
 			}
 		} 
-	}
+	} 
 	
 	public void ensureConnected() throws IOException, InterruptedException{
 		while(!hasConnected()){
@@ -402,4 +403,16 @@ public class TcpClient<REQ extends Id, RES extends Id> implements Client<REQ, RE
 		return String.format("(connected=%s, remote=%s:%d)", hasConnected(), host, port);
 	}
 	 
+	
+	public ChannelFuture connect(){
+		if(hasConnected()) return this.channelFuture;  
+		init(); 
+		
+		this.channelFuture = bootstrap.connect(host, port);
+		return this.channelFuture;
+	}
+	
+	public void send(Message message){ 
+		
+	}
 }

@@ -5,6 +5,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.zbus.net.Session;
 
@@ -32,12 +33,12 @@ public class TcpSession implements Session {
 		return ctx.channel().localAddress().toString();
 	}
 	
-	public void write(Object msg){
-		ctx.writeAndFlush(msg);
+	public ChannelFuture write(Object msg){
+		return ctx.writeAndFlush(msg);
 	}
 	
-	public void writeAndFlush(Object msg){
-		ctx.writeAndFlush(msg);
+	public ChannelFuture writeAndFlush(Object msg){
+		return ctx.writeAndFlush(msg);
 	}
 	
 	@Override
