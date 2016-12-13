@@ -16,122 +16,122 @@ import java.util.Map;
  *
  */
 public class Message {
-	public static final String Cmd       = "Cmd";
-	public static final String Topic     = "Topic";
-	public static final String Group     = "Group";
-	public static final String AppId     = "AppId";
-	public static final String Token     = "Token";
-	public static final String Ack       = "Ack";
-	public static final String Tag       = "Tag";
-	public static final String Id        = "Id";
-	public static final String Sender    = "Sender";
-	public static final String Receiver  = "Receiver";
-	public static final String Window    = "Window";
-	public static final String BatchSize = "BatchSize";
-	public static final String BatchInTx = "BatchInTx";
+	public static final String CMD         = "Cmd";
+	public static final String TOPIC       = "Topic";
+	public static final String GROUP       = "Group";
+	public static final String APPID       = "AppId";
+	public static final String TOKEN       = "Token";
+	public static final String ACK         = "Ack";
+	public static final String TAG         = "Tag";
+	public static final String ID          = "Id";
+	public static final String SENDER      = "Sender";
+	public static final String RECEIVER    = "Receiver";
+	public static final String WINDOW      = "Window";
+	public static final String BATCH_SIZE  = "BatchSize";
+	public static final String BATCH_IN_TX = "BatchInTx";
 
 	private Integer status;
 	private Map<String, String> headers = new HashMap<String, String>();
 	private byte[] body;
 
 	public void setCmd(String value) {
-		setHeader(Cmd, value);
+		setHeader(CMD, value);
 	}
 
 	public String getCmd() {
-		return getHeader(Cmd);
+		return getHeader(CMD);
 	}
 
 	public String getTopic() {
-		return getHeader(Topic);
+		return getHeader(TOPIC);
 	}
 	
 	public void setTopic(String value) {
-		setHeader(Topic, value);
+		setHeader(TOPIC, value);
 	} 
 
 	public String getGroup() {
-		return getHeader(Group);
+		return getHeader(GROUP);
 	}
 
 	public void setGroup(String value) {
-		setHeader(Group, value);
+		setHeader(GROUP, value);
 	}
 
 	public String getAppId() {
-		return getHeader(AppId);
+		return getHeader(APPID);
 	}
 
 	public void setAppId(String value) {
-		setHeader(AppId, value);
+		setHeader(APPID, value);
 	}
 
 	public String getToken() {
-		return getHeader(Token);
+		return getHeader(TOKEN);
 	}
 
 	public void setToken(String value) {
-		setHeader(Token, value);
+		setHeader(TOKEN, value);
 	}
 
 	public boolean getAck() {
-		String value = getHeader(Ack);
+		String value = getHeader(ACK);
 		return value == null ? false : Boolean.valueOf(value);
 	}
 
 	public void setAck(boolean value) {
-        setHeader(Ack, String.valueOf(value));
+        setHeader(ACK, String.valueOf(value));
 	}
 
 	public String getId() {
-		return getHeader(Id);
+		return getHeader(ID);
 	}
 
 	public void setId(String value) {
-		setHeader(Id, value);
+		setHeader(ID, value);
 	}
 
 	public String getsender() {
-		return getHeader(Sender);
+		return getHeader(SENDER);
 	}
 
 	public void setSender(String value) {
-	    setHeader(Sender, value);
+	    setHeader(SENDER, value);
 	}
 
 	public String getReceiver() {
-		return getHeader(Receiver);
+		return getHeader(RECEIVER);
 	}
 
 	public void setReceiver(String value) {
-		setHeader(Receiver, value);
+		setHeader(RECEIVER, value);
 	}
 
 	public Integer getWindow() {
-		String value = getHeader(Window);
+		String value = getHeader(WINDOW);
 		return value == null ? null : Integer.valueOf(value);
 	}
 
 	public void setWindow(Integer value) {
-		setHeader(Window, String.valueOf(value));
+		setHeader(WINDOW, String.valueOf(value));
 	}
 
 	public Integer getBatchSize() {
-		String value = getHeader(BatchSize);
+		String value = getHeader(BATCH_SIZE);
 		return value == null ? null : Integer.valueOf(value);
 	}
 
 	public void setBatchSize(Integer value) {
-		setHeader(BatchSize, String.valueOf(value));
+		setHeader(BATCH_SIZE, String.valueOf(value));
 	}
 
 	public boolean getBatchInTx() {
-		String value = getHeader(BatchInTx);
+		String value = getHeader(BATCH_IN_TX);
 		return value == null ? false : Boolean.valueOf(value);
 	}
 
 	public void setBatchInTx(boolean value) {
-		setHeader(BatchInTx, String.valueOf(value));
+		setHeader(BATCH_IN_TX, String.valueOf(value));
 	}
 
 	public Integer getStatus() {

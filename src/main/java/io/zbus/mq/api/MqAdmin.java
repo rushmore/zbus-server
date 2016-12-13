@@ -44,4 +44,17 @@ public interface MqAdmin{
 	void route(String peerId, Message message);
 	
 	void start();
+	
+	
+	public static interface AckMessageHandler {
+		void onAck(String cmd, Message message);
+	}
+
+	public static interface CtrlMessageHandler {
+		void onCtrl(String cmd, Message message);
+	}
+
+	public static interface DataMessageHandler {
+		void onData(Message message);
+	}
 }
