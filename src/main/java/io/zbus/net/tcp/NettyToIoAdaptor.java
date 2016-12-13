@@ -23,6 +23,20 @@ public class NettyToIoAdaptor extends ChannelInboundHandlerAdapter {
 	}
 	
 	@Override
+	public void channelRegistered(ChannelHandlerContext ctx) throws Exception { 
+		super.channelRegistered(ctx);
+		Session sess = attachSession(ctx); 
+		ioAdaptor.sessionRegistered(sess);
+	}
+	
+	@Override
+	public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
+		super.channelUnregistered(ctx);
+		Session sess = getSession(ctx);
+		ioAdaptor.sessionUnregistered(sess);
+	}
+	
+	@Override
 	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
 		ctx.flush();
 	}
@@ -30,32 +44,34 @@ public class NettyToIoAdaptor extends ChannelInboundHandlerAdapter {
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		Session sess = getSession(ctx);
-		ioAdaptor.onSessionMessage(msg, sess);
+		ioAdaptor.sessionData(msg, sess);
 	}
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 		Session sess = getSession(ctx);
-		ioAdaptor.onSessionError(cause, sess);
+		ioAdaptor.sessionError(cause, sess);
 	}
-	 
+	
+	
+	
 	@Override
 	public void channelActive(ChannelHandlerContext ctx) throws Exception {
-		Session sess = attachSession(ctx); 
-		ioAdaptor.onSessionCreated(sess);
+		Session sess = getSession(ctx);
+		ioAdaptor.sessionActive(sess);
 	}  
 	
 	@Override
 	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 		Session sess = getSession(ctx);
-		ioAdaptor.onSessionToDestroy(sess);
+		ioAdaptor.sessionInactive(sess);
 	} 
 	
 	@Override
 	public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
 		if (evt instanceof IdleStateEvent) {
 			Session sess = getSession(ctx);
-			ioAdaptor.onSessionIdle(sess);
+			ioAdaptor.sessionIdle(sess);
         }
 	}
 	

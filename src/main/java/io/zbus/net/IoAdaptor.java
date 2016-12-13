@@ -27,13 +27,17 @@ import java.io.IOException;
 
 public interface IoAdaptor{  
 	
-	void onSessionCreated(Session sess) throws IOException; 
+	void sessionRegistered(Session sess) throws IOException; 
 	
-	void onSessionToDestroy(Session sess) throws IOException; 
+	void sessionUnregistered(Session sess) throws IOException; 
 	
-	void onSessionMessage(Object msg, Session sess) throws IOException; 
+	void sessionActive(Session sess) throws IOException; 
 	
-	void onSessionError(Throwable e, Session sess) throws Exception;
+	void sessionInactive(Session sess) throws IOException; 
 	
-	void onSessionIdle(Session sess) throws IOException; 
+	void sessionData(Object msg, Session sess) throws IOException; 
+	
+	void sessionError(Throwable e, Session sess) throws Exception;
+	
+	void sessionIdle(Session sess) throws IOException; 
 }

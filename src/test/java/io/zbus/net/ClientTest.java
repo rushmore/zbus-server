@@ -7,62 +7,42 @@ import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
-import io.zbus.net.SimpleClient.DataHandler;
-import io.zbus.net.Sync.Id;
-import io.zbus.net.http.Message;
-import io.zbus.net.http.MessageToHttpWsCodec;
+import io.zbus.mq.api.Message;
+import io.zbus.net.Client.DataHandler;
 import io.zbus.net.tcp.TcpClient;
-
-class Msg implements Id{
-	private String id;
-	private String body;
-	@Override
-	public String getId() {
-		return id;
-	}
-	
-	@Override
-	public void setId(String id) { 
-		this.id = id;
-	}
-
-	public String getBody() {
-		return body;
-	}
-
-	public void setBody(String body) {
-		this.body = body;
-	}
-	
-	
-}
-
+ 
 public class ClientTest {
 
+	@SuppressWarnings("resource")
 	public static void main(String[] args) throws Exception {
 		IoDriver ioDriver = new IoDriver();
-		DefaultClient<Message, Message> client = new DefaultClient<Message, Message>("localhost:15555", ioDriver);
+		Client<Message, Message> client = new TcpClient<Message, Message>("localhost:15555", ioDriver);
 		client.codec(new CodecInitializer() { 
 			@Override
 			public void initPipeline(List<ChannelHandler> p) {
 				p.add(new HttpRequestEncoder()); 
 				p.add(new HttpResponseDecoder());  
-				p.add(new HttpObjectAggregator(32*1024*1024));
-				p.add(new MessageToHttpWsCodec());
+				p.add(new HttpObjectAggregator(32*1024*1024)); 
 			}
 		});
 		
 		Message message = new Message();
 		message.setCmd("produce");
-		message.setMq("hong");
+		message.setTopic("Hong");
+		
 		
 		client.onData(new DataHandler<Message>() { 
 			@Override
 			public void onData(Message data, Session session) throws IOException {
 				System.out.println(data);
 			}
-		});
-		client.connect().sync();
-		client.send(message);
+		});  
+		 
+		for(int i=0;i<2;i++){
+			client.send(message).sync(); 
+		}
+		System.out.println("===done===");
+		//client.close();
+		//ioDriver.close();
 	} 
 }

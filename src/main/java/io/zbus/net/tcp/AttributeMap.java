@@ -1,4 +1,4 @@
-package io.zbus.net;
+package io.zbus.net.tcp;
  
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
