@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
@@ -16,6 +14,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.zbus.net.Client;
 import io.zbus.net.CodecInitializer;
+import io.zbus.net.Future;
+import io.zbus.net.FutureListener;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
@@ -28,7 +28,7 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	private Bootstrap bootstrap;
 	protected final EventLoopGroup eventGroup;  
 	protected SslContext sslCtx;
-	protected ChannelFuture connectFuture; 
+	protected Future<Void> connectFuture; 
 	protected CodecInitializer codecInitializer; 
 	
 	protected Session session; 
@@ -133,14 +133,14 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	}  
 	
 	
-	public synchronized ChannelFuture connect(){
+	public synchronized Future<Void> connect(){
 		if(this.connectFuture != null) return this.connectFuture; 
 		init(); 
 		
-		this.connectFuture = bootstrap.connect(host, port);
-		this.connectFuture.addListener(new ChannelFutureListener() { 
+		this.connectFuture = new DefaultFuture<Void>(bootstrap.connect(host, port));
+		this.connectFuture.addListener(new FutureListener<Void>() { 
 			@Override
-			public void operationComplete(ChannelFuture future) throws Exception { 
+			public void operationComplete(Future<Void> future) throws Exception { 
 				if(!future.isSuccess()){
 					Throwable cause = future.cause();
 					log.error(cause.getMessage(), cause);
@@ -155,12 +155,12 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	} 
 	
 	
-	public ChannelFuture send(final REQ req){ 
+	public Future<Void> send(final REQ req){ 
 		if(!hasConnected()){
 			connect(); 
-			return connectFuture.addListener(new ChannelFutureListener() {
+			return connectFuture.addListener(new FutureListener<Void>() {
 				@Override
-				public void operationComplete(ChannelFuture future) throws Exception {
+				public void operationComplete(Future<Void> future) throws Exception {
 					if(future.isSuccess()){
 						if(session == null){
 							throw new IOException("Session not created");
@@ -173,7 +173,7 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 			}); 
 		}
 		
-		return session.writeAndFlush(req);  
+		return new DefaultFuture<Void>(session.writeAndFlush(req));  
     } 
 	
 	 

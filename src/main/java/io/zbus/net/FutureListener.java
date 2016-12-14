@@ -3,6 +3,6 @@ package io.zbus.net;
 import java.util.EventListener;
  
 
-public interface FutureListener<F extends Future<?>> extends EventListener { 
-	void operationComplete(F future) throws Exception;
+public interface FutureListener<V> extends EventListener { 
+	void operationComplete(Future<V> future) throws Exception;
 }

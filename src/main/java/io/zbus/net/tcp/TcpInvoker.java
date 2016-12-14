@@ -2,7 +2,6 @@ package io.zbus.net.tcp;
  
 import java.io.IOException;
 
-import io.netty.util.concurrent.DefaultPromise;
 import io.zbus.net.Future;
 import io.zbus.net.Identifiable;
 import io.zbus.net.Invoker;
@@ -24,11 +23,11 @@ public class TcpInvoker<REQ extends Identifiable, RES extends Identifiable> exte
 	}
 	
 	@Override
-	public Future<RES> invoke(REQ req) { 
-		DefaultPromise<RES> f = new DefaultPromise<RES>(eventGroup.next()); 
+	public Future<RES> invoke(REQ req) {  
+		Future<RES> future = new DefaultFuture<RES>(eventGroup.next());
 		
-		send(req);
+		send(req); 
 		
-		return null;
+		return future;
 	}  
 }

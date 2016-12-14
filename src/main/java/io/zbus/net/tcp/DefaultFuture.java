@@ -1,21 +1,28 @@
 package io.zbus.net.tcp;
-
+ 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
+import io.netty.util.concurrent.DefaultPromise;
+import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
  
 
 public class DefaultFuture<V> implements Future<V> { 
-	private io.netty.util.concurrent.Future<V> support;
+	private final io.netty.util.concurrent.Future<V> support;
+	private Map<Object, Object> listener2NettyListener = new ConcurrentHashMap<Object, Object>();
 	
 	public DefaultFuture(io.netty.util.concurrent.Future<V> support){
 		this.support = support;
+	}
+	
+	public DefaultFuture(EventExecutor executor) { 
+		this.support = new DefaultPromise<V>(executor);  
 	}
 	
 	@Override
@@ -56,70 +63,52 @@ public class DefaultFuture<V> implements Future<V> {
 	@Override
 	public Throwable cause() {
 		return support.cause();
-	} 
-	 
-	public Future<V> addListener2(final DefaultFutureListener<V> listener) {
-		support.addListener(new GenericFutureListener<io.netty.util.concurrent.Future<? super V>>() {
-
+	}  
+	
+	@Override
+	public DefaultFuture<V> addListener(final FutureListener<V> listener) {
+		GenericFutureListener<io.netty.util.concurrent.Future<? super V>> nettyListener = new GenericFutureListener<io.netty.util.concurrent.Future<? super V>>() {
 			@Override
 			public void operationComplete(io.netty.util.concurrent.Future<? super V> future) throws Exception {
 				listener.operationComplete(DefaultFuture.this);
 			}
-		});
+		};
+		
+		listener2NettyListener.put(listener, nettyListener);
+		support.addListener(nettyListener);
 		return this;
-	}
+	}  
 	
 	@Override
-	public DefaultFuture<V> addListener(final FutureListener<? extends Future<V>> listener) { 
-		final DefaultFuture<V> thisFuture = this; 
-		support.addListener(new GenericFutureListener<io.netty.util.concurrent.Future<? super V>>() {
+	public DefaultFuture<V> removeListener(FutureListener<V> listener) {
+		@SuppressWarnings("unchecked")
+		GenericFutureListener<io.netty.util.concurrent.Future<? super V>> nettyListener = (GenericFutureListener<io.netty.util.concurrent.Future<? super V>>) listener2NettyListener.get(listener);
 
-			@Override
-			public void operationComplete(io.netty.util.concurrent.Future<? super V> future) throws Exception {
-				//listener.operationComplete(thisFuture);
-			}
-		});
+		support.removeListener(nettyListener);
 		return this;
 	}
-	
-	@Override
-	public Future<V> addListeners(FutureListener<? extends Future<? super V>>... listeners) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+	 
 
 	@Override
-	public Future<V> removeListener(FutureListener<? extends Future<? super V>> listener) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public Future<V> removeListeners(FutureListener<? extends Future<? super V>>... listeners) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public Future<V> sync() throws InterruptedException {
+	public DefaultFuture<V> sync() throws InterruptedException {
 		support.sync();
 		return this;
 	}
 
 	@Override
-	public Future<V> syncUninterruptibly() {
+	public DefaultFuture<V> syncUninterruptibly() {
 		support.syncUninterruptibly();
 		return this;
 	}
 
 	@Override
-	public Future<V> await() throws InterruptedException {
+	public DefaultFuture<V> await() throws InterruptedException {
 		support.await();
 		return this;
 	}
 
 	@Override
-	public Future<V> awaitUninterruptibly() {
+	public DefaultFuture<V> awaitUninterruptibly() {
 		support.awaitUninterruptibly();
 		return this;
 	}
@@ -147,16 +136,5 @@ public class DefaultFuture<V> implements Future<V> {
 	@Override
 	public V getNow() {
 		return support.getNow();
-	} 
-	 
-	public static void main(String[] args) { 
-		DefaultFuture<Long> future = new DefaultFuture<Long>(null);
-		future.addListener(new DefaultFutureListener<Long>() { 
-			@Override
-			public void operationComplete(DefaultFuture<Long> future) throws Exception {
-				// TODO Auto-generated method stub
-				
-			}
-		}); 
-	}
+	}  
 }

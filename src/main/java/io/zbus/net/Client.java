@@ -2,15 +2,13 @@ package io.zbus.net;
  
 import java.io.Closeable;
 import java.io.IOException;
-
-import io.netty.channel.ChannelFuture;
   
 public interface Client<REQ, RES> extends IoAdaptor, Closeable {  
 	void codec(CodecInitializer codecInitializer); 
 	boolean hasConnected(); 
-	ChannelFuture connect();  
+	Future<Void> connect();  
 	
-	ChannelFuture send(REQ req); 
+	Future<Void> send(REQ req); 
 	
 	void onData(DataHandler<RES> dataHandler);
 	void onError(ErrorHandler errorHandler);
