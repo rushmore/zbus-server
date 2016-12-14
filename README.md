@@ -5,6 +5,7 @@ Goal:
 2. High Performance
 3. Backward Compatible
 4. Fully tested
+5. Message trace friendly
 
 ZBUS-0.8.0
 
