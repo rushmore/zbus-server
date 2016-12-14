@@ -12,7 +12,7 @@ package io.zbus.mq.api;
  * @author Rushmore
  *
  */
-public interface MqAdmin{   
+public interface MqClient{   
 	
 	Future<Topic> declareTopic(TopicCtrl topic);
 	
@@ -42,6 +42,14 @@ public interface MqAdmin{
 	void onCtrl(CtrlMessageHandler handler); 
 	
 	void route(String peerId, Message message);
+	
+	Future<Message> publish(Message message); 
+	
+	Message take(int timeout); 
+	
+	void applyConsumeFilter(String messageTag);
+	
+	void removeFilter(String messageTag);  
 	
 	void start();
 	
