@@ -34,6 +34,7 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	protected Session session; 
 	protected final String host;
 	protected final int port;  
+	protected int reconnectTimeMs = 3000;
 	
 	protected volatile DataHandler<RES> dataHandler; 
 	protected volatile ErrorHandler errorHandler;
@@ -66,7 +67,14 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 			@Override
 			public void onDisconnected() throws IOException {
 				connectFuture = null;
-				log.warn("Disconnected from(%s:%d)", host, port);  
+				log.warn("Disconnected from(%s:%d)", host, port);
+				log.info("Trying to reconnect in %.1f seconds", reconnectTimeMs/1000.0);
+				try {
+					Thread.sleep(reconnectTimeMs);
+				} catch (InterruptedException e) { 
+					return;
+				} 
+				connect();
 			}
 		});
 	} 
@@ -130,6 +138,19 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 		init(); 
 		
 		this.connectFuture = bootstrap.connect(host, port);
+		this.connectFuture.addListener(new ChannelFutureListener() { 
+			@Override
+			public void operationComplete(ChannelFuture future) throws Exception { 
+				if(!future.isSuccess()){
+					Throwable cause = future.cause();
+					log.error(cause.getMessage(), cause);
+					log.info("Trying to reconnect in %.1f seconds", reconnectTimeMs/1000.0);
+					Thread.sleep(reconnectTimeMs);
+					connectFuture = null;
+					connect();
+				}
+			}
+		});
 		return this.connectFuture;
 	} 
 	

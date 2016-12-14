@@ -14,17 +14,17 @@ package io.zbus.mq.api;
  */
 public interface MqAdmin{   
 	
-	MqFuture<Topic> declareTopic(TopicCtrl topic);
+	Future<Topic> declareTopic(TopicCtrl topic);
 	
-	MqFuture<Boolean> removeTopic(String topicName); 
+	Future<Boolean> removeTopic(String topicName); 
 	
-	MqFuture<Topic> queryTopic(String topicName); 
+	Future<Topic> queryTopic(String topicName); 
     
-	MqFuture<ConsumeGroup> declareConsumeGroup(ConsumeGroupCtrl group);
+	Future<ConsumeGroup> declareConsumeGroup(ConsumeGroupCtrl group);
 	
-	MqFuture<Boolean> removeConsumeGroup(String topicName, String groupName); 
+	Future<Boolean> removeConsumeGroup(String topicName, String groupName); 
 	
-	MqFuture<ConsumeGroup> queryConsumeGroup(String topicName, String groupName); 
+	Future<ConsumeGroup> queryConsumeGroup(String topicName, String groupName); 
     
 	/**
 	 * Setup Ack Message handler, Ack message notified with request message id back

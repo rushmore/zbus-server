@@ -16,7 +16,8 @@ public class ClientTest {
 	@SuppressWarnings("resource")
 	public static void main(String[] args) throws Exception {
 		IoDriver ioDriver = new IoDriver();
-		Client<Message, Message> client = new TcpClient<Message, Message>("localhost:15555", ioDriver);
+		
+		TcpClient<Message, Message> client = new TcpClient<Message, Message>("localhost:15555", ioDriver);
 		client.codec(new CodecInitializer() { 
 			@Override
 			public void initPipeline(List<ChannelHandler> p) {
@@ -38,10 +39,11 @@ public class ClientTest {
 			}
 		});  
 		 
-		for(int i=0;i<2;i++){
-			client.send(message).sync(); 
-		}
-		System.out.println("===done===");
+		client.connect();
+		while(true){
+			System.out.println("main");
+			Thread.sleep(1000);
+		} 
 		//client.close();
 		//ioDriver.close();
 	} 
