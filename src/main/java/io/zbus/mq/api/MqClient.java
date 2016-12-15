@@ -28,8 +28,7 @@ public interface MqClient{
 	
 	
 	MqFuture<Message> produce(Message message); 
-	MqFuture<Void> consume(ConsumeGroupCtrl ctrl); 
-	MqFuture<Void> route(String peerId, Message message); 
+	MqFuture<Void> consume(ConsumeGroupCtrl ctrl);  
 	
 	Message take(int timeout);  
 	
