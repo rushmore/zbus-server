@@ -1,8 +1,20 @@
 package io.zbus.mq.api;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.StringTokenizer;
+import java.util.Map.Entry;
+
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 /**
  * 
@@ -28,7 +40,7 @@ public class Message {
 	public static final String RECEIVER    = "receiver";
 	public static final String WINDOW      = "window";
 	public static final String BATCH_SIZE  = "batch-size";
-	public static final String BATCH_IN_TX = "batch-in-tx";
+	public static final String BATCH_IN_TX = "batch-in-tx"; 
 
 	private Integer status; //decide whether message is request or response
 	private String method;  //default GET
@@ -192,4 +204,154 @@ public class Message {
 		this.url = url;
 	}
 
+	@Override
+	public String toString() {
+		OutputStream out = new ByteArrayOutputStream();
+		try {
+			writeTo(out);
+			return out.toString();
+		} catch (IOException e) {
+			//ignore
+		}
+		return null;
+	}  
+
+	public void writeTo(OutputStream out) throws IOException{  
+		if(this.status != null){   
+			out.write(HTTP_PREFIX);
+			out.write(String.format("%d", status).getBytes());
+			out.write(HTTP_BLANK);
+			out.write(HttpResponseStatus.valueOf(status).reasonPhrase().getBytes());  
+		} else {
+			String method = this.method; 
+			if(method == null) method = "GET"; 
+			out.write(method.getBytes());
+			out.write(HTTP_BLANK); 
+			String url = this.url;
+			if(url == null) url = "/";
+			out.write(url.getBytes());
+			out.write(HTTP_SUFFIX); 
+		}
+		out.write(HTTP_CLCR);
+		Iterator<Entry<String, String>> it = headers.entrySet().iterator();
+		while(it.hasNext()){
+			Entry<String, String> kv = it.next();
+			out.write(kv.getKey().getBytes());
+			out.write(HTTP_KV_SPLIT);
+			out.write(kv.getValue().getBytes());
+			out.write(HTTP_CLCR);
+		}
+		out.write(HTTP_CLCR);
+		if(body != null){
+			out.write(body);
+		}  
+	}
+	
+	public void readFrom(byte[] data){
+		int idx = findHeaderEnd(data);
+		if(idx == -1){ 
+			throw new IllegalArgumentException("Invalid input byte array");
+		}
+		int headLen = idx + 1;
+		Message msg = new Message();
+		ByteArrayInputStream in = new ByteArrayInputStream(data, 0, headLen);
+		
+		try {
+			decodeHeaders(in);
+		} catch (IOException e) {
+			//ignore
+			return;
+		} 
+		String contentLength = msg.getHeader(HTTP_LENGTH);
+		if(contentLength == null){ //just head 
+			return;
+		}
+		
+		int bodyLen = Integer.valueOf(contentLength);   
+		if(data.length != headLen + bodyLen) {
+			throw new IllegalArgumentException("Invalid input byte array");
+		}
+		byte[] body = new byte[bodyLen];
+		System.arraycopy(data, headLen, body, 0, bodyLen);
+		msg.setBody(body);  
+	}
+	
+	private void decodeMeta(String meta){
+		if("".equals(meta)){
+			return;
+		}
+		StringTokenizer st = new StringTokenizer(meta);
+		String firstWord = st.nextToken();
+		if(firstWord.toUpperCase().startsWith("HTTP")){ //As response
+			status = Integer.valueOf(st.nextToken());
+			return;
+		}
+		//As request
+		method = firstWord;  
+		url = st.nextToken(); 
+	} 
+	
+	private void decodeHeaders(InputStream in) throws IOException{ 
+		InputStreamReader inputStreamReader = null;
+		BufferedReader bufferedReader = null;
+		try{  
+			inputStreamReader = new InputStreamReader(in);
+			bufferedReader = new BufferedReader(inputStreamReader);
+			String meta = bufferedReader.readLine();
+			if(meta == null){
+				throw new IllegalStateException("Missing first line of HTTP package");
+			}
+			decodeMeta(meta);
+			
+			String line = bufferedReader.readLine();
+	        while (line != null && line.trim().length() > 0) {
+	            int p = line.indexOf(':');
+	            if (p >= 0){ 
+	            	setHeader(line.substring(0, p).trim().toLowerCase(), line.substring(p + 1).trim());
+	            } 
+	            line = bufferedReader.readLine();
+	        } 
+		} finally {
+			if(bufferedReader != null){
+				try { bufferedReader.close(); } catch (IOException e) {}
+			}
+			if(inputStreamReader != null){
+				try { inputStreamReader.close(); } catch (IOException e) {}
+			} 
+		}
+	}
+	
+	private int findHeaderEnd(byte[] data){ 
+		int i = 0;
+		int limit = data.length;
+		while(i+3<limit){
+			if(data[i] != '\r') {
+				i += 1;
+				continue;
+			}
+			if(data[i+1] != '\n'){
+				i += 1;
+				continue;
+			}
+			
+			if(data[i+2] != '\r'){
+				i += 3;
+				continue;
+			}
+			
+			if(data[i+3] != '\n'){
+				i += 3;
+				continue;
+			}
+			
+			return i+3; 
+		}
+		return -1;
+	}
+	private static final byte[] HTTP_CLCR = "\r\n".getBytes();
+	private static final byte[] HTTP_KV_SPLIT = ": ".getBytes();
+	private static final byte[] HTTP_BLANK = " ".getBytes();
+	private static final byte[] HTTP_PREFIX = "HTTP/1.1 ".getBytes();
+	private static final byte[] HTTP_SUFFIX = " HTTP/1.1".getBytes(); 
+	private static final String HTTP_LENGTH = "content-length";
 }
