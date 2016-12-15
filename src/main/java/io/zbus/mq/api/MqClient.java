@@ -14,25 +14,24 @@ package io.zbus.mq.api;
  */
 public interface MqClient{   
 	
-	Future<Topic> declareTopic(TopicCtrl topic); 
-	Future<Boolean> removeTopic(String topicName);  
-	Future<Topic> queryTopic(String topicName); 
+	MqFuture<Topic> declareTopic(TopicCtrl topic); 
+	MqFuture<Boolean> removeTopic(String topicName);  
+	MqFuture<Topic> queryTopic(String topicName); 
     
-	Future<ConsumeGroup> declareConsumeGroup(ConsumeGroupCtrl group); 
-	Future<Boolean> removeConsumeGroup(String topicName, String groupName);  
-	Future<ConsumeGroup> queryConsumeGroup(String topicName, String groupName); 
+	MqFuture<ConsumeGroup> declareConsumeGroup(ConsumeGroupCtrl group); 
+	MqFuture<Boolean> removeConsumeGroup(String topicName, String groupName);  
+	MqFuture<ConsumeGroup> queryConsumeGroup(String topicName, String groupName); 
      
     void onAck(AckMessageHandler handler); 
 	void onData(DataMessageHandler handler);  
 	void onCtrl(CtrlMessageHandler handler); 
 	
 	
-	Future<Message> produce(Message message); 
-	void consume(ConsumeGroupCtrl ctrl);
+	MqFuture<Message> produce(Message message); 
+	MqFuture<Void> consume(ConsumeGroupCtrl ctrl); 
+	MqFuture<Void> route(String peerId, Message message); 
 	
-	void route(String peerId, Message message); 
-	Message take(int timeout); 
-	 
+	Message take(int timeout);  
 	
 	void start();
 	

@@ -2,8 +2,6 @@ package io.zbus.net;
 
 import java.io.Closeable;
 
-import io.netty.channel.ChannelFuture;
-
 public interface Session extends Closeable {
 	
 	String id(); 
@@ -12,9 +10,9 @@ public interface Session extends Closeable {
 	
 	String getLocalAddress();
 	
-	ChannelFuture write(Object msg);
+	Future<Void> write(Object msg);
 	
-	ChannelFuture writeAndFlush(Object msg);
+	Future<Void> writeAndFlush(Object msg);
 	
 	void flush();
 	

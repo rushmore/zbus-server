@@ -30,7 +30,10 @@ public class Message {
 	public static final String BATCH_SIZE  = "BatchSize";
 	public static final String BATCH_IN_TX = "BatchInTx";
 
-	private Integer status;
+	private Integer status; //decide whether message is request or response
+	private String method;  //default GET
+	private String url;     //default /
+	
 	private Map<String, String> headers = new HashMap<String, String>();
 	private byte[] body;
 
@@ -134,14 +137,6 @@ public class Message {
 		setHeader(BATCH_IN_TX, String.valueOf(value));
 	}
 
-	public Integer getStatus() {
-		return status;
-	}
-
-	public void setStatus(Integer value) {
-		this.status = value; 
-	}
-
 	public String getHeader(String key) {
 		if (!headers.containsKey(key))
 			return null;
@@ -163,8 +158,8 @@ public class Message {
 	public Message setBody(byte[] value) {
 		this.body = value;
 		return this;
-	}
-
+	} 
+	
 	public void setBody(String value) {
 		setBody(value.getBytes());
 	}
@@ -172,4 +167,29 @@ public class Message {
 	public void setBody(String value, Charset charset) {
 		setBody(value.getBytes(charset));
 	}
+	
+	public Integer getStatus() {
+		return status;
+	}
+
+	public void setStatus(Integer value) {
+		this.status = value; 
+	} 
+	
+	public String getMethod() {
+		return method;
+	}
+
+	public void setMethod(String method) {
+		this.method = method;
+	}
+
+	public String getUrl() {
+		return url;
+	}
+
+	public void setUrl(String url) {
+		this.url = url;
+	}
+
 }

@@ -43,6 +43,7 @@ public class ClientTest {
 		while(true){
 			System.out.println("main");
 			Thread.sleep(1000);
+			client.send(message);
 		} 
 		//client.close();
 		//ioDriver.close();

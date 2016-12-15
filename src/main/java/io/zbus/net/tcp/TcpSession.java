@@ -3,8 +3,8 @@ package io.zbus.net.tcp;
 import java.io.IOException;
 import java.util.UUID;
 
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
+import io.zbus.net.Future;
 import io.zbus.net.Session;
 
 public class TcpSession extends AttributeMap implements Session {
@@ -30,12 +30,12 @@ public class TcpSession extends AttributeMap implements Session {
 		return ctx.channel().localAddress().toString();
 	}
 	
-	public ChannelFuture write(Object msg){
-		return ctx.writeAndFlush(msg);
+	public Future<Void> write(Object msg){
+		return new DefaultFuture<Void>(ctx.writeAndFlush(msg));
 	}
 	
-	public ChannelFuture writeAndFlush(Object msg){
-		return ctx.writeAndFlush(msg);
+	public Future<Void> writeAndFlush(Object msg){
+		return new DefaultFuture<Void>(ctx.writeAndFlush(msg));
 	}
 	
 	@Override

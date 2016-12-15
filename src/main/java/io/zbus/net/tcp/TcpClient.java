@@ -173,7 +173,7 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 			}); 
 		}
 		
-		return new DefaultFuture<Void>(session.writeAndFlush(req));  
+		return session.writeAndFlush(req);  
     } 
 	
 	 
