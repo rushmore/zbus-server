@@ -1,7 +1,7 @@
 package io.zbus.mq.api;
 
-public interface Broker extends Invoker{  
-	Invoker createInvoker();
+public interface Broker extends MqInvoker{  
+	MqInvoker createInvoker();
 	void onServerJoin();
 	void onServerLeave();
 	void workingServers();

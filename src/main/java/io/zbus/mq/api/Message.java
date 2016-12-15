@@ -16,19 +16,19 @@ import java.util.Map;
  *
  */
 public class Message {
-	public static final String CMD         = "Cmd";
-	public static final String TOPIC       = "Topic";
-	public static final String GROUP       = "Group";
-	public static final String APPID       = "AppId";
-	public static final String TOKEN       = "Token";
-	public static final String ACK         = "Ack";
-	public static final String TAG         = "Tag";
-	public static final String ID          = "Id";
-	public static final String SENDER      = "Sender";
-	public static final String RECEIVER    = "Receiver";
-	public static final String WINDOW      = "Window";
-	public static final String BATCH_SIZE  = "BatchSize";
-	public static final String BATCH_IN_TX = "BatchInTx";
+	public static final String CMD         = "cmd";
+	public static final String TOPIC       = "topic";
+	public static final String CHANNEL     = "channel";
+	public static final String APPID       = "appid";
+	public static final String TOKEN       = "token";
+	public static final String ACK         = "ack";
+	public static final String TAG         = "tag";
+	public static final String ID          = "id";
+	public static final String SENDER      = "sender";
+	public static final String RECEIVER    = "receiver";
+	public static final String WINDOW      = "window";
+	public static final String BATCH_SIZE  = "batch-size";
+	public static final String BATCH_IN_TX = "batch-in-tx";
 
 	private Integer status; //decide whether message is request or response
 	private String method;  //default GET
@@ -53,12 +53,12 @@ public class Message {
 		setHeader(TOPIC, value);
 	} 
 
-	public String getGroup() {
-		return getHeader(GROUP);
+	public String getChannel() {
+		return getHeader(CHANNEL);
 	}
 
-	public void setGroup(String value) {
-		setHeader(GROUP, value);
+	public void setChannel(String value) {
+		setHeader(CHANNEL, value);
 	}
 
 	public String getAppId() {

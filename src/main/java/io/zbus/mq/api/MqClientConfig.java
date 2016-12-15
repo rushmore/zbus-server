@@ -1,7 +1,6 @@
 package io.zbus.mq.api;
 
-public class MqConfig {
-	public String topic;  
+public class MqClientConfig { 
 	public String appId;
 	public String token; 
 }

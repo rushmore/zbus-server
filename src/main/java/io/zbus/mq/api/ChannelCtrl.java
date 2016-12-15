@@ -1,8 +1,8 @@
 package io.zbus.mq.api;
 
-public class ConsumeGroupCtrl {
+public class ChannelCtrl {
 	public String topic;
-	public String consumeGroup;
+	public String channel;
 	
 	public Boolean deleteOnExit;
 	public Boolean exclusive;
