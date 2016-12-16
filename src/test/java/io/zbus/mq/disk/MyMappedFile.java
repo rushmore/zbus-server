@@ -3,6 +3,8 @@ package io.zbus.mq.disk;
 import java.io.File;
 import java.io.IOException;
 
+import io.zbus.mq.diskq.MappedFile;
+
 public class MyMappedFile extends MappedFile {
 	private int testData = 0;
 

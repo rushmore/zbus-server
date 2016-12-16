@@ -9,5 +9,5 @@ public interface Broker {
 	void returnOne(MqClient client);
 	void returnAll(List<MqClient> clients);
 	
-	MqClient filter(List<MqClient> clients, Object metaData);
+	void onSelection(BrokerSelector selector);
 }

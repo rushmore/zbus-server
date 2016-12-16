@@ -1,4 +1,4 @@
-package io.zbus.mq.disk;
+package io.zbus.mq.diskq;
 
 import java.io.IOException;
 import java.util.concurrent.locks.Lock;

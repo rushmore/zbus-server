@@ -2,8 +2,9 @@ package io.zbus.mq.disk;
 
 import java.io.File;
 
-import io.zbus.mq.disk.Index;
-import io.zbus.mq.disk.QueueWriter;
+import io.zbus.mq.diskq.Index;
+import io.zbus.mq.diskq.QueueReader;
+import io.zbus.mq.diskq.QueueWriter;
 
 public class QueueWriterTest {
 	
