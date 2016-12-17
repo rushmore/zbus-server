@@ -36,10 +36,10 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	protected final int port;  
 	protected int reconnectTimeMs = 3000;
 	
-	protected volatile DataHandler<RES> dataHandler; 
-	protected volatile ErrorHandler errorHandler;
-	protected volatile ConnectedHandler connectedHandler;
-	protected volatile DisconnectedHandler disconnectedHandler;  
+	private volatile DataHandler<RES> dataHandler; 
+	private volatile ErrorHandler errorHandler;
+	private volatile ConnectedHandler connectedHandler;
+	private volatile DisconnectedHandler disconnectedHandler;  
 	
 	public TcpClient(String address, IoDriver driver){  
 		eventGroup = driver.getGroup();
@@ -253,9 +253,9 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	}
 	
 	@Override
-	public void sessionData(Object msg, Session sess) throws IOException {
+	public void sessionData(Object data, Session sess) throws IOException {
 		@SuppressWarnings("unchecked")
-		RES res = (RES)msg;   
+		RES res = (RES)data;   
     	if(dataHandler != null){
     		dataHandler.onData(res, sess);
     		return;

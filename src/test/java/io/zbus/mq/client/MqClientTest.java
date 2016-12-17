@@ -1,40 +1,33 @@
-package io.zbus.mq.net;
+package io.zbus.mq.client;
  
 import java.io.IOException;
 
 import io.zbus.mq.api.Message;
-import io.zbus.mq.net.MessageClient;
 import io.zbus.net.Client.DataHandler;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
  
-public class ClientTest {
+public class MqClientTest {
 
 	@SuppressWarnings("resource")
 	public static void main(String[] args) throws Exception {
 		IoDriver ioDriver = new IoDriver();
 		
-		MessageClient client = new MessageClient("localhost:15555", ioDriver); 
-		
-		Message message = new Message();
-		message.setCmd("produce");
-		message.setTopic("Hong");
-		message.setHeader("mq", "hong");
-		
+		TcpMqClient client = new TcpMqClient("localhost:8080", ioDriver); 
 		
 		client.onData(new DataHandler<Message>() { 
-			int i=0;
 			@Override
 			public void onData(Message data, Session session) throws IOException {
-				System.out.println(++i + " " + data);
+				System.out.println(data);
+				
 			}
-		});  
-		 
-		client.connect();
-		for(int i=0;i<100;i++){
-			System.out.println("main"); 
-			client.send(message);
-		} 
+		});
+		
+		Message message = new Message(); 
+		message.setTopic("Hong"); 
+		
+		client.produce(message);
+		
 		//client.close();
 		//ioDriver.close();
 	} 

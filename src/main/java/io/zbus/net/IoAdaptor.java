@@ -35,7 +35,7 @@ public interface IoAdaptor{
 	
 	void sessionInactive(Session sess) throws IOException; 
 	
-	void sessionData(Object msg, Session sess) throws IOException; 
+	void sessionData(Object data, Session sess) throws IOException; 
 	
 	void sessionError(Throwable e, Session sess) throws Exception;
 	

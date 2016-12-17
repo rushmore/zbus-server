@@ -10,4 +10,7 @@ public interface Broker {
 	void returnAll(List<MqClient> clients);
 	
 	void onSelection(BrokerSelector selector);
+	
+	void addServerEventListener();
+	void removeServerEventListener();
 }

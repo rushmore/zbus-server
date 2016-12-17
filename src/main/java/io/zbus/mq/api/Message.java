@@ -29,6 +29,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  */
 public class Message {
 	public static final String CMD         = "cmd";
+	public static final String SUB_CMD     = "sub-cmd";
 	public static final String TOPIC       = "topic";
 	public static final String CHANNEL     = "channel";
 	public static final String APPID       = "appid";
@@ -55,6 +56,14 @@ public class Message {
 
 	public String getCmd() {
 		return getHeader(CMD);
+	}
+	
+	public void setSubCmd(String value) {
+		setHeader(SUB_CMD, value);
+	}
+
+	public String getSubCmd() {
+		return getHeader(SUB_CMD);
 	}
 
 	public String getTopic() {
@@ -156,6 +165,10 @@ public class Message {
 	}
 
 	public void setHeader(String key, String value) {
+		if(key == null){
+			throw new IllegalArgumentException("key must not be null");
+		} 
+		if(value == null) return;
 		headers.put(key, value); 
 	}
 
@@ -168,7 +181,7 @@ public class Message {
 	}
 
 	public Message setBody(byte[] value) {
-		this.body = value;
+		this.body = value; 
 		return this;
 	} 
 	

@@ -69,8 +69,13 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 					HttpResponseStatus.valueOf(Integer.valueOf(msg.getStatus())));
 		}
 
+		int contentLength = 0;
+		if(msg.getBody() != null){
+			contentLength = msg.getBody().length;
+		}
+		httpMsg.headers().add(HttpHeaderNames.CONTENT_LENGTH, ""+contentLength);
 		for (Entry<String, String> e : msg.getHeaders().entrySet()) {
-			httpMsg.headers().add(e.getKey().toLowerCase(), e.getValue());
+			httpMsg.headers().add(e.getKey(), e.getValue());
 		}
 		if (msg.getBody() != null) {
 			httpMsg.content().writeBytes(msg.getBody());

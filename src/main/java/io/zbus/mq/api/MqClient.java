@@ -8,12 +8,10 @@ public interface MqClient extends MqAdmin{
 	
 	MqFuture<Message> produce(Message message); 
 	MqFuture<Void> consume(ChannelCtrl ctrl);   
-	Message take(int timeout);  
-	
-	void start(); 
+	Message take(int timeout);   
 	
 	public static interface AckMessageHandler {
-		void onAck(String cmd, Message message);
+		void onAck(Message message);
 	}
 
 	public static interface CtrlMessageHandler {

@@ -1,4 +1,4 @@
-package io.zbus.mq.disk;
+package io.zbus.mq.diskq;
 
 import java.io.File;
 import java.io.RandomAccessFile;
