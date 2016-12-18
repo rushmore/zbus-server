@@ -3,6 +3,8 @@ package io.zbus.net.tcp;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelHandler;
@@ -16,6 +18,7 @@ import io.zbus.net.Client;
 import io.zbus.net.CodecInitializer;
 import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
+import io.zbus.net.IdHandler;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
@@ -40,6 +43,9 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	private volatile ErrorHandler errorHandler;
 	private volatile ConnectedHandler connectedHandler;
 	private volatile DisconnectedHandler disconnectedHandler;  
+	
+	private IdHandler<REQ, RES> idHandler; 
+	private ConcurrentMap<String, DefaultPromise<RES>> waitingPromises = new ConcurrentHashMap<String, DefaultPromise<RES>>();
 	
 	public TcpClient(String address, IoDriver driver){  
 		eventGroup = driver.getGroup();
@@ -117,21 +123,22 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	} 
 	
 	public synchronized void startHeartbeat(int heartbeatInSeconds){ 
+		
 	}
 	
 	@Override
 	public void stopHeartbeat() {  
+		
 	}
 	
 	@Override
 	public void heartbeat() { 
-	}
-	
+		
+	} 
 	
 	public boolean hasConnected() {
 		return session != null && session.isActive();
-	}  
-	
+	}   
 	
 	public synchronized Future<Void> connect(){
 		if(this.connectFuture != null) return this.connectFuture; 
@@ -152,10 +159,9 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 			}
 		});
 		return this.connectFuture;
-	} 
+	}   
 	
-	
-	public Future<Void> send(final REQ req){ 
+	public Future<Void> send(final REQ req){  
 		if(!hasConnected()){
 			connect(); 
 			return connectFuture.addListener(new FutureListener<Void>() {
@@ -176,43 +182,54 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 		return session.writeAndFlush(req);  
     } 
 	
-	 
-	@Override
-	public void close() throws IOException {
-		onConnected(null);
-		onDisconnected(null); 
-		
-		if(session != null){
-			session.close();
-			session = null;
-		}   
-	} 
 	
-	public void onData(DataHandler<RES> msgHandler){
-    	this.dataHandler = msgHandler;
-    }
-    
-    public void onError(ErrorHandler errorHandler){
-    	this.errorHandler = errorHandler;
-    } 
-    
-    public void onConnected(ConnectedHandler connectedHandler){
-    	this.connectedHandler = connectedHandler;
-    } 
-    
-    public void onDisconnected(DisconnectedHandler disconnectedHandler){
-    	this.disconnectedHandler = disconnectedHandler;
-    } 
-    
+	public Future<RES> invoke(REQ req) { 
+		if(idHandler == null){
+			throw new IllegalStateException("idHandler required to support invoke");
+		}
+		DefaultPromise<RES> promise = new DefaultPromise<RES>(eventGroup.next()); 
+		waitingPromises.put(promise.id(), promise);
+		
+		idHandler.setRequestId(req, promise.id()); 
+		
+		send(req); 
+		
+		return promise;
+	}
+	
 	@Override
-	public String toString() { 
-		return String.format("(Connected=%s, Remote=%s:%d)", hasConnected(), host, port);
-	} 
-
+	public void sessionData(Object data, Session sess) throws IOException {
+		@SuppressWarnings("unchecked")
+		RES res = (RES)data;   
+		if(idHandler != null){
+			String id = idHandler.getResponseId(res);
+			if(id != null){
+				DefaultPromise<RES> pormise = waitingPromises.remove(id); 
+				if(pormise != null){ 
+					pormise.setSuccess(res); 
+					return;
+				}
+			}
+		}
+		
+    	if(dataHandler != null){
+    		dataHandler.onData(res, sess);
+    		return;
+    	} 
+    	
+    	log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop,%s", res);
+	}  
+	
 	@Override
 	public void sessionRegistered(Session sess) throws IOException { 
 		this.session = sess; 
 	}
+	
+	@Override
+	public void sessionUnregistered(Session sess) throws IOException {
+		this.session = null;
+		this.connectFuture = null;
+	} 
 	
 	@Override
 	public void sessionActive(Session sess) throws IOException { 
@@ -244,23 +261,42 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	@Override
 	public void sessionIdle(Session sess) throws IOException { 
 		log.info(sess + " Idle");
-	}
-	   
+	} 
+
+	 
 	@Override
-	public void sessionUnregistered(Session sess) throws IOException {
-		this.session = null;
-		this.connectFuture = null;
-	}
+	public void close() throws IOException {
+		onConnected(null);
+		onDisconnected(null); 
+		
+		if(session != null){
+			session.close();
+			session = null;
+		}   
+	} 
 	
+	public void onData(DataHandler<RES> msgHandler){
+    	this.dataHandler = msgHandler;
+    }
+    
+    public void onError(ErrorHandler errorHandler){
+    	this.errorHandler = errorHandler;
+    } 
+    
+    public void onConnected(ConnectedHandler connectedHandler){
+    	this.connectedHandler = connectedHandler;
+    } 
+    
+    public void onDisconnected(DisconnectedHandler disconnectedHandler){
+    	this.disconnectedHandler = disconnectedHandler;
+    } 
+     
+    public void setIdHandler(IdHandler<REQ, RES> idHandler) {
+		this.idHandler = idHandler;
+	}
+    
 	@Override
-	public void sessionData(Object data, Session sess) throws IOException {
-		@SuppressWarnings("unchecked")
-		RES res = (RES)data;   
-    	if(dataHandler != null){
-    		dataHandler.onData(res, sess);
-    		return;
-    	} 
-    	
-    	log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop,%s", res);
+	public String toString() { 
+		return String.format("(Connected=%s, Remote=%s:%d)", hasConnected(), host, port);
 	}  
 }

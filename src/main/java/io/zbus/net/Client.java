@@ -2,13 +2,26 @@ package io.zbus.net;
  
 import java.io.Closeable;
 import java.io.IOException;
-  
+
+/**
+ * 
+ * Caution: when caller use asynchronous way to send or invoke REQ, the REQ message should not be reused,
+ * since the underlying do NOT copy message, the message may still in queue to deliver, modification on the
+ * ongoing message may cause undefined behavior.
+ * 
+ * @author Rushmore
+ *
+ * @param <REQ>
+ * @param <RES>
+ */
 public interface Client<REQ, RES> extends IoAdaptor, Closeable {  
 	void codec(CodecInitializer codecInitializer); 
 	boolean hasConnected(); 
 	Future<Void> connect();  
 	
 	Future<Void> send(REQ req); 
+
+	Future<RES> invoke(REQ req); 
 	
 	void onData(DataHandler<RES> dataHandler);
 	void onError(ErrorHandler errorHandler);

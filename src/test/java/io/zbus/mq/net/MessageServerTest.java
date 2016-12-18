@@ -6,7 +6,7 @@ import io.zbus.mq.net.MessageServer;
 import io.zbus.mq.net.MessageAdaptor.MessageProcessor;
 import io.zbus.net.Server;
 
-public class MessageServerExample {
+public class MessageServerTest {
 	
 	public static void main(String[] args) throws Exception {    
 		Server server = new MessageServer();
@@ -18,6 +18,7 @@ public class MessageServerExample {
 				public Message process(Message request) {  
 					Message res = new Message();
 					res.setStatus(200);
+					res.setId(request.getId());
 					res.setBody("hello: " + System.currentTimeMillis());
 					return res;
 				}

@@ -13,17 +13,18 @@ import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
  
 
-public class DefaultFuture<V> implements Future<V> { 
-	private final io.netty.util.concurrent.Future<V> support;
+public class DefaultFuture<V> implements Future<V> {  
 	private Map<Object, Object> listener2NettyListener = new ConcurrentHashMap<Object, Object>();
+	 
+	protected final io.netty.util.concurrent.Future<V> support;
 	
 	public DefaultFuture(io.netty.util.concurrent.Future<V> support){
-		this.support = support;
+		this.support = support; 
 	}
-	
+	  
 	public DefaultFuture(EventExecutor executor) { 
-		this.support = new DefaultPromise<V>(executor);  
-	}
+		this(new DefaultPromise<V>(executor));    
+	} 
 	
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
@@ -137,4 +138,6 @@ public class DefaultFuture<V> implements Future<V> {
 	public V getNow() {
 		return support.getNow();
 	}  
+	
+	
 }

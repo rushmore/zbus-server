@@ -5,7 +5,7 @@ public class ConsumeCtrl {
 	public String channel; 
 	
 	public String messageFilter;
-	public Long consumeStartOffset;
+	public Long consumeStartOffset; //valid only for single MqClient
 	public Long consumeStartTime;
 	public Boolean consumeStartDefault;    
 }

@@ -21,7 +21,7 @@ public interface Future<V> extends java.util.concurrent.Future<V> {
     boolean awaitUninterruptibly(long timeout, TimeUnit unit); 
     boolean awaitUninterruptibly(long timeoutMillis); 
     
-    V getNow(); 
+    V getNow();  
     
     @Override
     boolean cancel(boolean mayInterruptIfRunning);
