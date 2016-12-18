@@ -8,7 +8,7 @@ import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
 import io.zbus.mq.api.Message;
 import io.zbus.net.CodecInitializer;
-import io.zbus.net.IdHandler;
+import io.zbus.net.Identifier;
 import io.zbus.net.IoDriver;
 import io.zbus.net.tcp.TcpClient;
 
@@ -28,7 +28,7 @@ public class MessageClient extends TcpClient<Message, Message>{
 		}); 
 		
 		//make message match work 
-		setIdHandler(new IdHandler<Message, Message>() { 
+		setIdentifier(new Identifier<Message, Message>() { 
 			@Override
 			public void setRequestId(Message message, String id) { 
 				message.setId(id);

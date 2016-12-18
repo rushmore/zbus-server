@@ -3,7 +3,7 @@ package io.zbus.mq.client;
 import java.io.IOException;
 
 import io.zbus.mq.api.Message;
-import io.zbus.net.Client.DataHandler;
+import io.zbus.net.Client.MsgHandler;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
  
@@ -15,9 +15,9 @@ public class MqClientTest {
 		
 		TcpMqClient client = new TcpMqClient("localhost:8080", ioDriver); 
 		
-		client.onData(new DataHandler<Message>() { 
+		client.onMessage(new MsgHandler<Message>() { 
 			@Override
-			public void onData(Message data, Session session) throws IOException {
+			public void onMessage(Message data, Session session) throws IOException {
 				System.out.println(data);
 				
 			}

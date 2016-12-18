@@ -4,20 +4,27 @@ import java.io.IOException;
 
 import io.zbus.mq.api.Channel;
 import io.zbus.mq.api.ChannelCtrl;
+import io.zbus.mq.api.ConsumeCtrl;
+import io.zbus.mq.api.ConsumeResult;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
 import io.zbus.mq.api.MqFuture;
+import io.zbus.mq.api.ProduceResult;
 import io.zbus.mq.api.Protocol;
 import io.zbus.mq.api.Topic;
 import io.zbus.mq.api.TopicCtrl;
 import io.zbus.mq.net.MessageClient;
+import io.zbus.net.Future;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
+import io.zbus.util.logger.Logger;
+import io.zbus.util.logger.LoggerFactory;
 
 public class TcpMqClient extends MessageClient implements MqClient {
-	private AckMessageHandler ackMessageHandler;
-	private DataMessageHandler dataMessageHandler;
-	private CtrlMessageHandler ctrlMessageHandler;
+	private static final Logger log = LoggerFactory.getLogger(TcpMqClient.class); 
+	private AckMessageHandler ackHandler;
+	private DataMessageHandler dataHandler;
+	private CtrlMessageHandler ctrlHandler;
 	
 	public TcpMqClient(String address, IoDriver driver) {
 		super(address, driver); 
@@ -55,28 +62,32 @@ public class TcpMqClient extends MessageClient implements MqClient {
 
 	@Override
 	public void onAck(AckMessageHandler handler) {
-		ackMessageHandler = handler;
+		ackHandler = handler;
 	}
 
 	@Override
 	public void onData(DataMessageHandler handler) {
-		dataMessageHandler = handler;
+		dataHandler = handler;
 	}
 
 	@Override
 	public void onCtrl(CtrlMessageHandler handler) {
-		ctrlMessageHandler = handler;
+		ctrlHandler = handler;
 	}
 
 	@Override
-	public MqFuture<Message> produce(Message message) {
+	public MqFuture<ProduceResult> produce(Message message) {
 		message.setCmd("produce");
-		send(message); 
+		if(message.getAck() == false){
+			send(message); 
+		} else {
+			Future<Message> res = invoke(message);
+		} 
 		return null;
 	}
 
 	@Override
-	public MqFuture<Void> consume(ChannelCtrl ctrl) {
+	public MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl) {
 		return null;
 	}
 
@@ -87,30 +98,37 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	
 	@Override
 	public void sessionData(Object data, Session sess) throws IOException { 
+		boolean handled = handleInvokedMessage(data, sess);
+		if(handled) return;
+		
 		Message message = (Message)data; 
 		
 		if(Protocol.ACK.equalsIgnoreCase(message.getCmd())){
-			if(ackMessageHandler != null){
-				ackMessageHandler.onAck(message);
+			if(ackHandler != null){
+				ackHandler.onAck(message);
 				return;
 			}
 		}
 		
 		if(Protocol.DATA.equalsIgnoreCase(message.getCmd())){
-			if(dataMessageHandler != null){
-				dataMessageHandler.onData(message);
+			if(dataHandler != null){
+				dataHandler.onData(message);
 				return;
 			}
 		}
 		
 		if(Protocol.CTRL.equalsIgnoreCase(message.getCmd())){
-			if(ctrlMessageHandler != null){
-				ctrlMessageHandler.onCtrl(message.getSubCmd(), message);
+			if(ctrlHandler != null){
+				ctrlHandler.onCtrl(message.getSubCmd(), message);
 				return;
 			}
 		}
 		
-		super.sessionData(data, sess);
+		log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop,%s", message);
 	}
 
+	@Override
+	public void onMessage(MsgHandler<Message> msgHandler) { 
+		throw new UnsupportedOperationException("onMessage not support for TcpMqClient");
+	}
 }

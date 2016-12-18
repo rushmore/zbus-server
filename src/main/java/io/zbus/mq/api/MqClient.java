@@ -6,8 +6,8 @@ public interface MqClient extends MqAdmin{
 	void onData(DataMessageHandler handler);  
 	void onCtrl(CtrlMessageHandler handler); 
 	
-	MqFuture<Message> produce(Message message); 
-	MqFuture<Void> consume(ChannelCtrl ctrl);   
+	MqFuture<ProduceResult> produce(Message message); 
+	MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl);   
 	Message take(int timeout);   
 	
 	public static interface AckMessageHandler {

@@ -18,7 +18,7 @@ import io.zbus.net.Client;
 import io.zbus.net.CodecInitializer;
 import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
-import io.zbus.net.IdHandler;
+import io.zbus.net.Identifier;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
@@ -39,12 +39,12 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	protected final int port;  
 	protected int reconnectTimeMs = 3000;
 	
-	private volatile DataHandler<RES> dataHandler; 
+	private volatile MsgHandler<RES> msgHandler; 
 	private volatile ErrorHandler errorHandler;
 	private volatile ConnectedHandler connectedHandler;
 	private volatile DisconnectedHandler disconnectedHandler;  
 	
-	private IdHandler<REQ, RES> idHandler; 
+	private Identifier<REQ, RES> identifier; 
 	private ConcurrentMap<String, DefaultPromise<RES>> waitingPromises = new ConcurrentHashMap<String, DefaultPromise<RES>>();
 	
 	public TcpClient(String address, IoDriver driver){  
@@ -184,40 +184,49 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	
 	
 	public Future<RES> invoke(REQ req) { 
-		if(idHandler == null){
+		if(identifier == null){
 			throw new IllegalStateException("idHandler required to support invoke");
 		}
 		DefaultPromise<RES> promise = new DefaultPromise<RES>(eventGroup.next()); 
 		waitingPromises.put(promise.id(), promise);
 		
-		idHandler.setRequestId(req, promise.id()); 
+		identifier.setRequestId(req, promise.id()); 
 		
 		send(req); 
 		
 		return promise;
 	}
 	
-	@Override
-	public void sessionData(Object data, Session sess) throws IOException {
+	protected boolean handleInvokedMessage(Object data, Session sess){
 		@SuppressWarnings("unchecked")
 		RES res = (RES)data;   
-		if(idHandler != null){
-			String id = idHandler.getResponseId(res);
+		if(identifier != null){
+			String id = identifier.getResponseId(res);
 			if(id != null){
 				DefaultPromise<RES> pormise = waitingPromises.remove(id); 
 				if(pormise != null){ 
 					pormise.setSuccess(res); 
-					return;
+					return true;
 				}
 			}
 		}
+		return false;
+	}
+	
+	@Override
+	public void sessionData(Object data, Session sess) throws IOException {
+		boolean handled = handleInvokedMessage(data, sess);
+		if(handled) return;
 		
-    	if(dataHandler != null){
-    		dataHandler.onData(res, sess);
+		@SuppressWarnings("unchecked")
+		RES msg = (RES)data;    
+		 
+    	if(msgHandler != null){
+    		msgHandler.onMessage(msg, sess);
     		return;
     	} 
     	
-    	log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop,%s", res);
+    	log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop,%s", msg);
 	}  
 	
 	@Override
@@ -275,8 +284,8 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 		}   
 	} 
 	
-	public void onData(DataHandler<RES> msgHandler){
-    	this.dataHandler = msgHandler;
+	public void onMessage(MsgHandler<RES> msgHandler){
+    	this.msgHandler = msgHandler;
     }
     
     public void onError(ErrorHandler errorHandler){
@@ -291,8 +300,8 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
     	this.disconnectedHandler = disconnectedHandler;
     } 
      
-    public void setIdHandler(IdHandler<REQ, RES> idHandler) {
-		this.idHandler = idHandler;
+    public void setIdentifier(Identifier<REQ, RES> identifier) {
+		this.identifier = identifier;
 	}
     
 	@Override

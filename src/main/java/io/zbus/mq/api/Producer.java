@@ -17,5 +17,5 @@ public interface Producer extends MqAdmin {
 	 * @param message
 	 * @return
 	 */
-	MqFuture<Message> publish(Message message); 
+	MqFuture<ProduceResult> publish(Message message); 
 }

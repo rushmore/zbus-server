@@ -23,7 +23,7 @@ public interface Client<REQ, RES> extends IoAdaptor, Closeable {
 
 	Future<RES> invoke(REQ req); 
 	
-	void onData(DataHandler<RES> dataHandler);
+	void onMessage(MsgHandler<RES> dataHandler);
 	void onError(ErrorHandler errorHandler);
     void onConnected(ConnectedHandler connectedHandler);
     void onDisconnected(DisconnectedHandler disconnectedHandler);
@@ -48,7 +48,7 @@ public interface Client<REQ, RES> extends IoAdaptor, Closeable {
 		void onError(Throwable e, Session session) throws IOException;   
 	}
 	
-	public static interface DataHandler<T> { 
-		void onData(T data, Session session) throws IOException;   
+	public static interface MsgHandler<T> { 
+		void onMessage(T msg, Session session) throws IOException;   
 	}  
 }

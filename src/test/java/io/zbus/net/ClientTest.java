@@ -8,7 +8,7 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
 import io.zbus.mq.api.Message;
-import io.zbus.net.Client.DataHandler;
+import io.zbus.net.Client.MsgHandler;
 import io.zbus.net.tcp.TcpClient;
  
 public class ClientTest {
@@ -32,9 +32,9 @@ public class ClientTest {
 		message.setTopic("Hong");
 		
 		
-		client.onData(new DataHandler<Message>() { 
+		client.onMessage(new MsgHandler<Message>() { 
 			@Override
-			public void onData(Message data, Session session) throws IOException {
+			public void onMessage(Message data, Session session) throws IOException {
 				System.out.println(data);
 			}
 		});  
