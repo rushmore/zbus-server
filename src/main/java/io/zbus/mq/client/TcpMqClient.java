@@ -14,7 +14,6 @@ import io.zbus.mq.api.Protocol;
 import io.zbus.mq.api.Topic;
 import io.zbus.mq.api.TopicCtrl;
 import io.zbus.mq.net.MessageClient;
-import io.zbus.net.Future;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
@@ -81,7 +80,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
 		if(message.getAck() == false){
 			send(message); 
 		} else {
-			Future<Message> res = invoke(message);
+			//Future<Message> res = invoke(message);
 		} 
 		return null;
 	}

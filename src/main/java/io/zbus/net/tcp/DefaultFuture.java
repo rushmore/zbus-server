@@ -14,7 +14,7 @@ import io.zbus.net.FutureListener;
  
 
 public class DefaultFuture<V> implements Future<V> {  
-	private Map<Object, Object> listener2NettyListener = new ConcurrentHashMap<Object, Object>();
+	private Map<Object, Object> listenerMap = new ConcurrentHashMap<Object, Object>();
 	 
 	protected final io.netty.util.concurrent.Future<V> support;
 	
@@ -68,24 +68,25 @@ public class DefaultFuture<V> implements Future<V> {
 	
 	@Override
 	public DefaultFuture<V> addListener(final FutureListener<V> listener) {
-		GenericFutureListener<io.netty.util.concurrent.Future<? super V>> nettyListener = new GenericFutureListener<io.netty.util.concurrent.Future<? super V>>() {
+		GenericFutureListener<io.netty.util.concurrent.Future<? super V>> supportListener = new GenericFutureListener<io.netty.util.concurrent.Future<? super V>>() {
 			@Override
 			public void operationComplete(io.netty.util.concurrent.Future<? super V> future) throws Exception {
 				listener.operationComplete(DefaultFuture.this);
 			}
 		};
 		
-		listener2NettyListener.put(listener, nettyListener);
-		support.addListener(nettyListener);
+		listenerMap.put(listener, supportListener);
+		support.addListener(supportListener);
 		return this;
 	}  
 	
 	@Override
 	public DefaultFuture<V> removeListener(FutureListener<V> listener) {
 		@SuppressWarnings("unchecked")
-		GenericFutureListener<io.netty.util.concurrent.Future<? super V>> nettyListener = (GenericFutureListener<io.netty.util.concurrent.Future<? super V>>) listener2NettyListener.get(listener);
+		GenericFutureListener<io.netty.util.concurrent.Future<? super V>> supportListener 
+			= (GenericFutureListener<io.netty.util.concurrent.Future<? super V>>) listenerMap.get(listener);
 
-		support.removeListener(nettyListener);
+		support.removeListener(supportListener);
 		return this;
 	}
 	 

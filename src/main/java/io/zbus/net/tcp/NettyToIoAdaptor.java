@@ -34,6 +34,7 @@ public class NettyToIoAdaptor extends ChannelInboundHandlerAdapter {
 		super.channelUnregistered(ctx);
 		Session sess = getSession(ctx);
 		ioAdaptor.sessionUnregistered(sess);
+		sessionMap.remove(sess.id());
 	}
 	
 	@Override
