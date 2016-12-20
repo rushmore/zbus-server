@@ -6,8 +6,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import io.zbus.mq.api.MqFuture;
-import io.zbus.mq.api.MqFutureListener;
+import io.zbus.mq.api.MqClient.MqFuture;
+import io.zbus.mq.api.MqClient.MqFutureListener;
 import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
  

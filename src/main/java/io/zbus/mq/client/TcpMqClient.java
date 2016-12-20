@@ -2,17 +2,9 @@ package io.zbus.mq.client;
 
 import java.io.IOException;
 
-import io.zbus.mq.api.Channel;
-import io.zbus.mq.api.ChannelCtrl;
-import io.zbus.mq.api.ConsumeCtrl;
-import io.zbus.mq.api.ConsumeResult;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
-import io.zbus.mq.api.MqFuture;
-import io.zbus.mq.api.ProduceResult;
 import io.zbus.mq.api.Protocol;
-import io.zbus.mq.api.Topic;
-import io.zbus.mq.api.TopicCtrl;
 import io.zbus.mq.net.MessageClient;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
@@ -21,9 +13,9 @@ import io.zbus.util.logger.LoggerFactory;
 
 public class TcpMqClient extends MessageClient implements MqClient {
 	private static final Logger log = LoggerFactory.getLogger(TcpMqClient.class); 
-	private AckMessageHandler ackHandler;
-	private DataMessageHandler dataHandler;
-	private CtrlMessageHandler ctrlHandler;
+	private AckHandler ackHandler;
+	private DataHandler dataHandler;
+	private CtrlHandler ctrlHandler;
 	
 	public TcpMqClient(String address, IoDriver driver) {
 		super(address, driver); 
@@ -60,17 +52,17 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 
 	@Override
-	public void onAck(AckMessageHandler handler) {
+	public void onAck(AckHandler handler) {
 		ackHandler = handler;
 	}
 
 	@Override
-	public void onData(DataMessageHandler handler) {
+	public void onData(DataHandler handler) {
 		dataHandler = handler;
 	}
 
 	@Override
-	public void onCtrl(CtrlMessageHandler handler) {
+	public void onCtrl(CtrlHandler handler) {
 		ctrlHandler = handler;
 	}
 

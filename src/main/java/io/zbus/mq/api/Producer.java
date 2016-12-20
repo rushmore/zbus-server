@@ -1,5 +1,8 @@
 package io.zbus.mq.api;
 
+import io.zbus.mq.api.MqClient.MqFuture;
+import io.zbus.mq.api.MqClient.ProduceResult;
+
 /**
  * Abstraction of MqClient from the Producer point of view. 
  * 
@@ -17,5 +20,6 @@ public interface Producer extends MqAdmin {
 	 * @param message
 	 * @return
 	 */
-	MqFuture<ProduceResult> publish(Message message); 
+	MqFuture<ProduceResult> publish(Message message);  
+
 }

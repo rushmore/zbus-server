@@ -1,5 +1,6 @@
 package io.zbus.mq.api;
 
+import io.zbus.mq.api.MqClient.ConsumeCtrl;
 
 /**
  * Abstraction of MqClient from the Consumer point of view. 
@@ -21,5 +22,5 @@ public interface Consumer extends MqAdmin {
 	
 	void onData();
 	void onCtrl();
-	void onAck();
+	void onAck(); 
 }
