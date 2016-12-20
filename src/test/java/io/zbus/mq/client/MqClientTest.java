@@ -13,7 +13,7 @@ public class MqClientTest {
 	public static void main(String[] args) throws Exception {
 		IoDriver ioDriver = new IoDriver();
 		
-		TcpMqClient client = new TcpMqClient("localhost:8080", ioDriver); 
+		MqTcpClient client = new MqTcpClient("localhost:8080", ioDriver); 
 		
 		client.onMessage(new MsgHandler<Message>() { 
 			@Override

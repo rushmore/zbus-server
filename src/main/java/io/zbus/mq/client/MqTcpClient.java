@@ -11,13 +11,13 @@ import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
 import io.zbus.util.logger.LoggerFactory;
 
-public class TcpMqClient extends MessageClient implements MqClient {
-	private static final Logger log = LoggerFactory.getLogger(TcpMqClient.class); 
+public class MqTcpClient extends MessageClient implements MqClient {
+	private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class); 
 	private AckHandler ackHandler;
 	private DataHandler dataHandler;
 	private CtrlHandler ctrlHandler;
 	
-	public TcpMqClient(String address, IoDriver driver) {
+	public MqTcpClient(String address, IoDriver driver) {
 		super(address, driver); 
 	}
 
