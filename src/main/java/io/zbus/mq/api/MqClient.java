@@ -1,28 +1,32 @@
 package io.zbus.mq.api;
 
+import java.io.Closeable;
 import java.util.EventListener;
 import java.util.concurrent.TimeUnit;
 
-public interface MqClient extends MqAdmin{    
+public interface MqClient extends MqAdmin, Closeable{    
      
-    void onAck(AckHandler handler); 
-	void onData(DataHandler handler);  
-	void onCtrl(CtrlHandler handler); 
+    void onProduceAck(AckHandler handler); 
+    void onConsumeAck(AckHandler handler);  
+	void onStream(StreamHandler handler);  
+	void onQuit(QuitHandler handler); 
 	
 	MqFuture<ProduceResult> produce(Message message); 
 	MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl);   
 	Message take(int timeout);   
 	
+	
+	
 	public static interface AckHandler {
 		void onAck(Message message);
-	}
+	} 
 
-	public static interface CtrlHandler {
-		void onCtrl(String cmd, Message message);
-	}
-
-	public static interface DataHandler {
-		void onData(Message message);
+	public static interface StreamHandler {
+		void onStream(Message message);
+	} 
+	
+	public static interface QuitHandler {
+		void onQuit(Message message);
 	}
 	
 	public static interface MqFuture<V> extends java.util.concurrent.Future<V> {

@@ -39,7 +39,7 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	protected final int port;  
 	protected int reconnectTimeMs = 3000;
 	
-	private volatile MsgHandler<RES> msgHandler; 
+	private volatile DataHandler<RES> dataHandler; 
 	private volatile ErrorHandler errorHandler;
 	private volatile ConnectedHandler connectedHandler;
 	private volatile DisconnectedHandler disconnectedHandler;  
@@ -221,8 +221,8 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 		@SuppressWarnings("unchecked")
 		RES msg = (RES)data;    
 		 
-    	if(msgHandler != null){
-    		msgHandler.onMessage(msg, sess);
+    	if(dataHandler != null){
+    		dataHandler.onData(msg, sess);
     		return;
     	} 
     	
@@ -284,20 +284,20 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 		}   
 	} 
 	
-	public void onMessage(MsgHandler<RES> msgHandler){
-    	this.msgHandler = msgHandler;
+	public void onData(DataHandler<RES> handler){
+    	this.dataHandler = handler;
     }
     
-    public void onError(ErrorHandler errorHandler){
-    	this.errorHandler = errorHandler;
+    public void onError(ErrorHandler handler){
+    	this.errorHandler = handler;
     } 
     
-    public void onConnected(ConnectedHandler connectedHandler){
-    	this.connectedHandler = connectedHandler;
+    public void onConnected(ConnectedHandler handler){
+    	this.connectedHandler = handler;
     } 
     
-    public void onDisconnected(DisconnectedHandler disconnectedHandler){
-    	this.disconnectedHandler = disconnectedHandler;
+    public void onDisconnected(DisconnectedHandler handler){
+    	this.disconnectedHandler = handler;
     } 
      
     public void setIdentifier(Identifier<REQ, RES> identifier) {

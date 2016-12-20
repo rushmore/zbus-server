@@ -7,17 +7,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import io.zbus.mq.api.MqClient.MqFuture;
-import io.zbus.mq.api.MqClient.MqFutureListener;
-import io.zbus.net.Future;
-import io.zbus.net.FutureListener;
+import io.zbus.mq.api.MqClient.MqFutureListener; 
  
 
-public class DefaultMqFuture<V> implements MqFuture<V> {  
+class DefaultMqFuture<V, W> implements MqFuture<V> {  
 	private Map<Object, Object> listenerMap = new ConcurrentHashMap<Object, Object>();
-	protected final Future<V> support;
+	protected final io.zbus.net.Future<W> support;
 	
-	public DefaultMqFuture(Future<V> support){
+	public DefaultMqFuture(io.zbus.net.Future<W> support){
 		this.support = support; 
+	} 
+	
+	@SuppressWarnings("unchecked")
+	public V convert(W result){ 
+		return (V)result;
 	}
 
 	@Override
@@ -32,12 +35,12 @@ public class DefaultMqFuture<V> implements MqFuture<V> {
 
 	@Override
 	public V get() throws InterruptedException, ExecutionException { 
-		return support.get();
+		return convert(support.get());
 	}
 
 	@Override
 	public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException { 
-		return support.get(timeout, unit);
+		return convert(support.get(timeout, unit));
 	}
 
 	@Override
@@ -57,9 +60,9 @@ public class DefaultMqFuture<V> implements MqFuture<V> {
 
 	@Override
 	public MqFuture<V> addListener(final MqFutureListener<V> listener) { 
-		FutureListener<V> supportListener = new FutureListener<V>() { 
+		io.zbus.net.FutureListener<W> supportListener = new io.zbus.net.FutureListener<W>() {   
 			@Override
-			public void operationComplete(Future<V> future) throws Exception {
+			public void operationComplete(io.zbus.net.Future<W> future) throws Exception {
 				listener.operationComplete(DefaultMqFuture.this);
 			}
 		};
@@ -71,7 +74,7 @@ public class DefaultMqFuture<V> implements MqFuture<V> {
 	@Override
 	public MqFuture<V> removeListener(MqFutureListener<V> listener) {
 		@SuppressWarnings("unchecked")
-		FutureListener<V> supportListener = (FutureListener<V>) listenerMap.get(listener); 
+		io.zbus.net.FutureListener<W> supportListener = (io.zbus.net.FutureListener<W>) listenerMap.get(listener); 
 		if(supportListener == null){
 			throw new IllegalStateException("listener not registered");
 		}
@@ -125,7 +128,7 @@ public class DefaultMqFuture<V> implements MqFuture<V> {
 
 	@Override
 	public V getNow() { 
-		return support.getNow();
+		return convert(support.getNow());
 	}
 
 	@Override

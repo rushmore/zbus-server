@@ -2,10 +2,13 @@ package io.zbus.mq.client;
 
 import java.io.IOException;
 
+import com.alibaba.fastjson.JSON;
+
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
 import io.zbus.mq.api.Protocol;
 import io.zbus.mq.net.MessageClient;
+import io.zbus.net.Future;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
@@ -13,17 +16,45 @@ import io.zbus.util.logger.LoggerFactory;
 
 public class MqTcpClient extends MessageClient implements MqClient {
 	private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class); 
-	private AckHandler ackHandler;
-	private DataHandler dataHandler;
-	private CtrlHandler ctrlHandler;
+	private AckHandler produceAckHandler;
+	private AckHandler consumeAckHandler;
+	private StreamHandler streamHandler;
+	private QuitHandler quitHandler;
+	
+	private Auth auth;
 	
 	public MqTcpClient(String address, IoDriver driver) {
 		super(address, driver); 
 	}
 
+	private void fillCommonHeaders(Message message){
+		if(auth != null){
+			message.setAppId(auth.getAppId());
+		}
+		if(auth != null){
+			message.setToken(auth.getToken());
+		}
+	}
+	
 	@Override
-	public MqFuture<Topic> declareTopic(TopicCtrl ctrl) {
-		return null;
+	public MqFuture<Topic> declareTopic(TopicCtrl ctrl) { 
+		Message message = new Message();
+		fillCommonHeaders(message);
+		
+		message.setCmd(Protocol.DECLARE_TOPIC);
+		message.setJsonBody(JSON.toJSONBytes(ctrl)); 
+		
+		Future<Message> res = invoke(message);   
+		
+		DefaultMqFuture<Topic, Message> future = new DefaultMqFuture<Topic, Message>(res){
+			@Override
+			public Topic convert(Message result) {  
+				
+				Topic topic = JSON.parseObject(result.getBody(), Topic.class);
+				return topic;
+			}
+		};
+		return future;
 	}
 
 	@Override
@@ -52,23 +83,28 @@ public class MqTcpClient extends MessageClient implements MqClient {
 	}
 
 	@Override
-	public void onAck(AckHandler handler) {
-		ackHandler = handler;
+	public void onProduceAck(AckHandler handler) {
+		produceAckHandler = handler;
+	}
+	
+	@Override
+	public void onConsumeAck(AckHandler handler) {
+		consumeAckHandler = handler;
 	}
 
 	@Override
-	public void onData(DataHandler handler) {
-		dataHandler = handler;
+	public void onStream(StreamHandler handler) {
+		streamHandler = handler;
 	}
 
 	@Override
-	public void onCtrl(CtrlHandler handler) {
-		ctrlHandler = handler;
+	public void onQuit(QuitHandler handler) {
+		quitHandler = handler;
 	}
 
 	@Override
 	public MqFuture<ProduceResult> produce(Message message) {
-		message.setCmd("produce");
+		message.setCmd(Protocol.PRODUCE);
 		if(message.getAck() == false){
 			send(message); 
 		} else {
@@ -89,37 +125,53 @@ public class MqTcpClient extends MessageClient implements MqClient {
 	
 	@Override
 	public void sessionData(Object data, Session sess) throws IOException { 
-		boolean handled = handleInvokedMessage(data, sess);
-		if(handled) return;
-		
 		Message message = (Message)data; 
+		String cmd = message.getCmd();
 		
-		if(Protocol.ACK.equalsIgnoreCase(message.getCmd())){
-			if(ackHandler != null){
-				ackHandler.onAck(message);
+		if(Protocol.RESPONSE.equalsIgnoreCase(cmd)){
+			boolean handled = handleInvokedMessage(data, sess);
+			if(handled) return; 
+		} 
+		
+		
+		if(Protocol.PRODUCE_ACK.equalsIgnoreCase(cmd)){
+			if(produceAckHandler != null){
+				produceAckHandler.onAck(message);
 				return;
 			}
 		}
 		
-		if(Protocol.DATA.equalsIgnoreCase(message.getCmd())){
-			if(dataHandler != null){
-				dataHandler.onData(message);
+		if(Protocol.CONSUME_ACK.equalsIgnoreCase(cmd)){
+			if(consumeAckHandler != null){
+				consumeAckHandler.onAck(message);
 				return;
 			}
 		}
 		
-		if(Protocol.CTRL.equalsIgnoreCase(message.getCmd())){
-			if(ctrlHandler != null){
-				ctrlHandler.onCtrl(message.getSubCmd(), message);
+		if(Protocol.STREAM.equalsIgnoreCase(cmd)){
+			if(streamHandler != null){
+				streamHandler.onStream(message);
 				return;
 			}
 		}
 		
-		log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop,%s", message);
+		if(Protocol.QUIT.equalsIgnoreCase(cmd)){
+			if(quitHandler != null){
+				quitHandler.onQuit(message);
+				return;
+			}
+		}
+		
+		log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop unsupported command(%s),msg=%s", cmd, message);
 	}
 
 	@Override
-	public void onMessage(MsgHandler<Message> msgHandler) { 
-		throw new UnsupportedOperationException("onMessage not support for TcpMqClient");
+	public void onData(DataHandler<Message> dataHandler) { 
+		throw new UnsupportedOperationException("onData not support for MqTcpClient, you may need onStream");
+	}
+
+	@Override
+	public void configAuth(Auth auth) {
+		this.auth = auth;
 	}
 }

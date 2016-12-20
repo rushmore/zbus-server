@@ -1,34 +1,31 @@
 package io.zbus.mq.client;
  
-import java.io.IOException;
-
-import io.zbus.mq.api.Message;
-import io.zbus.net.Client.MsgHandler;
+import io.zbus.mq.api.MqAdmin.Auth;
+import io.zbus.mq.api.MqAdmin.Topic;
+import io.zbus.mq.api.MqAdmin.TopicCtrl;
+import io.zbus.mq.api.MqClient;
+import io.zbus.mq.api.MqClient.MqFuture;
 import io.zbus.net.IoDriver;
-import io.zbus.net.Session;
  
 public class MqClientTest {
-
-	@SuppressWarnings("resource")
+ 
 	public static void main(String[] args) throws Exception {
 		IoDriver ioDriver = new IoDriver();
 		
-		MqTcpClient client = new MqTcpClient("localhost:8080", ioDriver); 
+		MqClient client = new MqTcpClient("localhost:8080", ioDriver);  
+		client.configAuth(new Auth(null, "xxxyyy"));
 		
-		client.onMessage(new MsgHandler<Message>() { 
-			@Override
-			public void onMessage(Message data, Session session) throws IOException {
-				System.out.println(data);
-				
-			}
-		});
 		
-		Message message = new Message(); 
-		message.setTopic("Hong"); 
+		TopicCtrl ctrl = new TopicCtrl();
+		ctrl.setTopic("MyTopic");   
 		
-		client.produce(message);
+		MqFuture<Topic> res = client.declareTopic(ctrl);
+		System.out.println(res.get());
 		
-		//client.close();
-		//ioDriver.close();
+		
+		System.out.println("==done==");
+		
+		client.close();
+		ioDriver.close();
 	} 
 }

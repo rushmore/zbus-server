@@ -11,8 +11,8 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.StringTokenizer;
 import java.util.Map.Entry;
+import java.util.StringTokenizer;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 
@@ -28,8 +28,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  *
  */
 public class Message {
-	public static final String CMD         = "cmd";
-	public static final String SUB_CMD     = "sub-cmd";
+	public static final String CMD         = "cmd"; 
 	public static final String TOPIC       = "topic";
 	public static final String CHANNEL     = "channel";
 	public static final String APPID       = "appid";
@@ -56,15 +55,7 @@ public class Message {
 
 	public String getCmd() {
 		return getHeader(CMD);
-	}
-	
-	public void setSubCmd(String value) {
-		setHeader(SUB_CMD, value);
-	}
-
-	public String getSubCmd() {
-		return getHeader(SUB_CMD);
-	}
+	} 
 
 	public String getTopic() {
 		return getHeader(TOPIC);
@@ -185,13 +176,19 @@ public class Message {
 		return this;
 	} 
 	
+	public Message setJsonBody(byte[] value){
+		setBody(value);
+		setHeader("content-type", "application/json");
+		return this;
+	}
+	
 	public void setBody(String value) {
 		setBody(value.getBytes());
 	}
 
 	public void setBody(String value, Charset charset) {
 		setBody(value.getBytes(charset));
-	}
+	} 
 	
 	public Integer getStatus() {
 		return status;
