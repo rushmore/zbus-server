@@ -5,8 +5,8 @@ import java.io.IOException;
 import com.alibaba.fastjson.JSON;
 
 import io.zbus.mq.api.Message;
-import io.zbus.mq.api.Protocol;
 import io.zbus.mq.api.MqAdmin.Topic;
+import io.zbus.mq.api.Protocol;
 import io.zbus.mq.net.MessageAdaptor;
 import io.zbus.net.Session;
 
@@ -30,7 +30,7 @@ public class MqAdaptor extends MessageAdaptor {
 				res.setId(msg.getId());
 				
 				Topic topic = new Topic();
-				topic.setName("MyTopic");
+				topic.name = "MyTopic" + System.currentTimeMillis();
 				res.setJsonBody(JSON.toJSONBytes(topic));
 				session.write(res);
 			}

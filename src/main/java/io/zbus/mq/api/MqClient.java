@@ -1,8 +1,6 @@
 package io.zbus.mq.api;
 
 import java.io.Closeable;
-import java.util.EventListener;
-import java.util.concurrent.TimeUnit;
 
 public interface MqClient extends MqAdmin, Closeable{    
      
@@ -29,35 +27,6 @@ public interface MqClient extends MqAdmin, Closeable{
 		void onQuit(Message message);
 	}
 	
-	public static interface MqFuture<V> extends java.util.concurrent.Future<V> {
-		 
-	    boolean isSuccess(); 
-	    boolean isCancellable(); 
-	    Throwable cause();
-	 
-	    MqFuture<V> addListener(MqFutureListener<V> listener);   
-	    MqFuture<V> removeListener(MqFutureListener<V> listener);  
-
-	    MqFuture<V> sync() throws InterruptedException; 
-	    MqFuture<V> syncUninterruptibly(); 
-	    
-	    MqFuture<V> await() throws InterruptedException; 
-	    MqFuture<V> awaitUninterruptibly(); 
-	    boolean await(long timeout, TimeUnit unit) throws InterruptedException; 
-	    boolean await(long timeoutMillis) throws InterruptedException; 
-	    boolean awaitUninterruptibly(long timeout, TimeUnit unit); 
-	    boolean awaitUninterruptibly(long timeoutMillis); 
-	    
-	    V getNow(); 
-	    
-	    @Override
-	    boolean cancel(boolean mayInterruptIfRunning);
-	}
-	
-	public static interface MqFutureListener<V> extends EventListener { 
-		void operationComplete(MqFuture<V> future) throws Exception;
-	}
-
 	public static class ProduceResult {
 		public boolean sendOk;
 		public boolean ackEnabled;

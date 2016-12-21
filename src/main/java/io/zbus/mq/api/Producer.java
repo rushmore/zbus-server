@@ -1,6 +1,5 @@
 package io.zbus.mq.api;
 
-import io.zbus.mq.api.MqClient.MqFuture;
 import io.zbus.mq.api.MqClient.ProduceResult;
 
 /**

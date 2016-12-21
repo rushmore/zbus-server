@@ -6,6 +6,7 @@ import com.alibaba.fastjson.JSON;
 
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
+import io.zbus.mq.api.MqFuture;
 import io.zbus.mq.api.Protocol;
 import io.zbus.mq.net.MessageClient;
 import io.zbus.net.Future;
@@ -29,15 +30,15 @@ public class MqTcpClient extends MessageClient implements MqClient {
 
 	private void fillCommonHeaders(Message message){
 		if(auth != null){
-			message.setAppId(auth.getAppId());
+			message.setAppId(auth.appId);
 		}
 		if(auth != null){
-			message.setToken(auth.getToken());
+			message.setToken(auth.token);
 		}
 	}
 	
 	@Override
-	public MqFuture<Topic> declareTopic(TopicCtrl ctrl) { 
+	public MqFuture<Topic> declareTopic(TopicDeclare ctrl) { 
 		Message message = new Message();
 		fillCommonHeaders(message);
 		
@@ -56,31 +57,7 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		};
 		return future;
 	}
-
-	@Override
-	public MqFuture<Boolean> removeTopic(String topic) {
-		return null;
-	}
-
-	@Override
-	public MqFuture<Topic> queryTopic(String topic) {
-		return null;
-	}
-
-	@Override
-	public MqFuture<Channel> declareChannel(ChannelCtrl ctrl) {
-		return null;
-	}
-
-	@Override
-	public MqFuture<Boolean> removeChannel(String topic, String channel) {
-		return null;
-	}
-
-	@Override
-	public MqFuture<Channel> queryChannel(String topic, String channel) {
-		return null;
-	}
+ 
 
 	@Override
 	public void onProduceAck(AckHandler handler) {
@@ -173,5 +150,35 @@ public class MqTcpClient extends MessageClient implements MqClient {
 	@Override
 	public void configAuth(Auth auth) {
 		this.auth = auth;
+	}
+
+	@Override
+	public MqFuture<Boolean> removeTopic(TopicRemove ctrl) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public MqFuture<Topic> queryTopic(TopicQuery ctrl) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public MqFuture<Channel> declareChannel(ChannelDeclare ctrl) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public MqFuture<Boolean> removeChannel(ChannelRemove ctrl) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public MqFuture<Channel> queryChannel(ChannelQuery ctrl) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 }
