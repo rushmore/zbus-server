@@ -18,6 +18,8 @@ import io.zbus.util.logger.LoggerFactory;
 public class MqTcpClient extends MessageClient implements MqClient {
 	private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class);  
 	
+	
+	
 	private AckHandler produceAckHandler;
 	private AckHandler consumeAckHandler;
 	private MessageHandler streamHandler;
@@ -74,17 +76,16 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		return null;
 	}
 	
-	public MqFuture<ConsumeResult> subscribe(String topic){
+	public MqFuture<ProduceResult> publish(Message message) {
 		return null;
 	}
-	public MqFuture<ConsumeResult> subscribe(String topic, String channel) {
-		return null;
+	
+	public void subscribe(String topic, String channel, MessageHandler handler){
+		
 	}
-
-	@Override
-	public Message take(int timeout) {
-		return null;
-	}
+	public void subscribe(String topic, MessageHandler handler){
+		
+	}  
 	
 	@Override
 	public void sessionData(Object data, Session sess) throws IOException { 

@@ -10,8 +10,7 @@ public interface MqClient extends MqAdmin, Closeable{
 	void onQuit(QuitHandler handler); 
 	
 	MqFuture<ProduceResult> produce(Message message); 
-	MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl);   
-	Message take(int timeout);   
+	MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl);    
 	
 	
 	
@@ -37,9 +36,8 @@ public interface MqClient extends MqAdmin, Closeable{
 	public static class ConsumeCtrl {
 		public String topic;
 		public String channel; 
-		 
-		public Long consumeStartOffset; //valid only for single MqClient
-		public Long consumeStartTime;   
+		public int window = 1;
+		public Boolean ack;
 	}
 	
 	public static class ConsumeResult {
