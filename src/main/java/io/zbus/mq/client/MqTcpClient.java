@@ -16,10 +16,11 @@ import io.zbus.util.logger.Logger;
 import io.zbus.util.logger.LoggerFactory;
 
 public class MqTcpClient extends MessageClient implements MqClient {
-	private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class); 
+	private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class);  
+	
 	private AckHandler produceAckHandler;
 	private AckHandler consumeAckHandler;
-	private StreamHandler streamHandler;
+	private MessageHandler streamHandler;
 	private QuitHandler quitHandler;
 	
 	private Auth auth;
@@ -28,7 +29,7 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		super(address, driver); 
 	}
 
-	private void fillCommonHeaders(Message message){
+	private void fillCommonHeaders(Message message){ 
 		if(auth != null){
 			message.setAppId(auth.appId);
 		}
@@ -37,28 +38,6 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		}
 	}
 	
-	@Override
-	public MqFuture<Topic> declareTopic(TopicDeclare ctrl) { 
-		Message message = new Message();
-		fillCommonHeaders(message);
-		
-		message.setCmd(Protocol.DECLARE_TOPIC);
-		message.setJsonBody(JSON.toJSONBytes(ctrl)); 
-		
-		Future<Message> res = invoke(message);   
-		
-		DefaultMqFuture<Topic, Message> future = new DefaultMqFuture<Topic, Message>(res){
-			@Override
-			public Topic convert(Message result) {  
-				
-				Topic topic = JSON.parseObject(result.getBody(), Topic.class);
-				return topic;
-			}
-		};
-		return future;
-	}
- 
-
 	@Override
 	public void onProduceAck(AckHandler handler) {
 		produceAckHandler = handler;
@@ -70,7 +49,7 @@ public class MqTcpClient extends MessageClient implements MqClient {
 	}
 
 	@Override
-	public void onStream(StreamHandler handler) {
+	public void onMessage(MessageHandler handler) {
 		streamHandler = handler;
 	}
 
@@ -92,6 +71,13 @@ public class MqTcpClient extends MessageClient implements MqClient {
 
 	@Override
 	public MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl) {
+		return null;
+	}
+	
+	public MqFuture<ConsumeResult> subscribe(String topic){
+		return null;
+	}
+	public MqFuture<ConsumeResult> subscribe(String topic, String channel) {
 		return null;
 	}
 
@@ -127,7 +113,7 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		
 		if(Protocol.STREAM.equalsIgnoreCase(cmd)){
 			if(streamHandler != null){
-				streamHandler.onStream(message);
+				streamHandler.onMessage(message);
 				return;
 			}
 		}
@@ -150,35 +136,53 @@ public class MqTcpClient extends MessageClient implements MqClient {
 	@Override
 	public void configAuth(Auth auth) {
 		this.auth = auth;
+	} 
+	
+	@Override
+	public MqFuture<Topic> declareTopic(TopicDeclare ctrl) { 
+		return jsonInvoke(ctrl, Protocol.DECLARE_TOPIC, Topic.class); 
 	}
-
+ 
 	@Override
 	public MqFuture<Boolean> removeTopic(TopicRemove ctrl) {
-		// TODO Auto-generated method stub
-		return null;
+		return jsonInvoke(ctrl, Protocol.REMOVE_TOPIC, Boolean.class); 
 	}
 
 	@Override
 	public MqFuture<Topic> queryTopic(TopicQuery ctrl) {
-		// TODO Auto-generated method stub
-		return null;
+		return jsonInvoke(ctrl, Protocol.QUERY_TOPIC, Topic.class);
 	}
 
 	@Override
 	public MqFuture<Channel> declareChannel(ChannelDeclare ctrl) {
-		// TODO Auto-generated method stub
-		return null;
+		return jsonInvoke(ctrl, Protocol.DECLARE_CHANNEL, Channel.class);
 	}
 
 	@Override
 	public MqFuture<Boolean> removeChannel(ChannelRemove ctrl) {
-		// TODO Auto-generated method stub
-		return null;
+		return jsonInvoke(ctrl, Protocol.REMOVE_CHANNEL, Boolean.class); 
 	}
 
 	@Override
 	public MqFuture<Channel> queryChannel(ChannelQuery ctrl) {
-		// TODO Auto-generated method stub
-		return null;
+		return jsonInvoke(ctrl, Protocol.QUERY_CHANNEL, Channel.class);
+	}
+	
+	private <V> MqFuture<V> jsonInvoke(Object ctrl, String cmd, final Class<V> clazz){
+		Message message = new Message();
+		fillCommonHeaders(message);
+		
+		message.setCmd(cmd);
+		message.setJsonBody(JSON.toJSONBytes(ctrl)); 
+		
+		Future<Message> res = invoke(message);   
+		
+		DefaultMqFuture<V, Message> future = new DefaultMqFuture<V, Message>(res){
+			@Override
+			public V convert(Message result) {   
+				return JSON.parseObject(result.getBody(), clazz); 
+			}
+		};
+		return future;
 	}
 }

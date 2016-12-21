@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -40,8 +41,11 @@ public class Message {
 	public static final String RECEIVER    = "receiver";
 	public static final String WINDOW      = "window";
 	public static final String BATCH_SIZE  = "batch-size";
-	public static final String BATCH_IN_TX = "batch-in-tx"; 
-
+	public static final String BATCH_IN_TX = "batch-in-tx";  
+	public static final String ENCODING    = "encoding";
+	
+	public static final String DEFAULT_ENCODING    = "utf8"; 
+	
 	private Integer status; //decide whether message is request or response
 	private String method;  //default GET
 	private String url;     //default /
@@ -104,6 +108,14 @@ public class Message {
 
 	public void setId(String value) {
 		setHeader(ID, value);
+	}
+	
+	public String getEncoding() {
+		return getHeader(ENCODING);
+	}
+
+	public void setEncoding(String value) {
+		setHeader(ENCODING, value);
 	}
 
 	public String getsender() {
@@ -169,6 +181,23 @@ public class Message {
 
 	public byte[] getBody() {
 		return body;
+	}
+	
+	public String getBodyAsString(Charset charset){
+		if(body == null) return null;
+		return new String(body, charset);
+	}
+	
+	public String getBodyAsString(){
+		if(body == null) return null;
+		String encoding = getEncoding();  
+		if(encoding == null) encoding = DEFAULT_ENCODING;
+		
+		try {
+			return new String(body, encoding);
+		} catch (UnsupportedEncodingException e) {
+			return null;
+		}
 	}
 
 	public Message setBody(byte[] value) {
@@ -363,5 +392,5 @@ public class Message {
 	private static final byte[] HTTP_BLANK = " ".getBytes();
 	private static final byte[] HTTP_PREFIX = "HTTP/1.1 ".getBytes();
 	private static final byte[] HTTP_SUFFIX = " HTTP/1.1".getBytes(); 
-	private static final String HTTP_LENGTH = "content-length";
+	private static final String HTTP_LENGTH = "content-length"; 
 }

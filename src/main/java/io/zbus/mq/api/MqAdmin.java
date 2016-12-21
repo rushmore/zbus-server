@@ -50,7 +50,12 @@ public interface MqAdmin{
 	
 	public static class Channel {
 		public String topic;
-		public String channel; 
+		public String channel;
+		@Override
+		public String toString() {
+			return "Channel [topic=" + topic + ", channel=" + channel + "]";
+		} 
+		
 	}
 	
 	public static class ChannelDeclare {

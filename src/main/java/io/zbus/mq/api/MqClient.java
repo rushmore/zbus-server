@@ -6,7 +6,7 @@ public interface MqClient extends MqAdmin, Closeable{
      
     void onProduceAck(AckHandler handler); 
     void onConsumeAck(AckHandler handler);  
-	void onStream(StreamHandler handler);  
+	void onMessage(MessageHandler handler);  
 	void onQuit(QuitHandler handler); 
 	
 	MqFuture<ProduceResult> produce(Message message); 
@@ -19,8 +19,8 @@ public interface MqClient extends MqAdmin, Closeable{
 		void onAck(Message message);
 	} 
 
-	public static interface StreamHandler {
-		void onStream(Message message);
+	public static interface MessageHandler {
+		void onMessage(Message message);
 	} 
 	
 	public static interface QuitHandler {
@@ -37,11 +37,9 @@ public interface MqClient extends MqAdmin, Closeable{
 	public static class ConsumeCtrl {
 		public String topic;
 		public String channel; 
-		
-		public String messageFilter;
+		 
 		public Long consumeStartOffset; //valid only for single MqClient
-		public Long consumeStartTime;
-		public Boolean consumeStartDefault;    
+		public Long consumeStartTime;   
 	}
 	
 	public static class ConsumeResult {
