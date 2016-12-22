@@ -1,8 +1,12 @@
 package io.zbus.mq.api;
 
-import io.zbus.mq.api.MqClient.ProduceResult;
-
-public interface Producer extends MqAdmin { 
-	MqFuture<ProduceResult> publish(Message message);  
-
+public interface Producer extends MqAdmin {  
+	MqFuture<ProduceResult> produce(Message message);
+	
+	public static class ProduceResult {
+		public boolean sendOk;
+		public boolean ackEnabled;
+		public Long serverAckTime;
+		public Throwable error;
+	} 
 }

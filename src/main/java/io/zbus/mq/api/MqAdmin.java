@@ -1,9 +1,10 @@
 package io.zbus.mq.api;
 
+import java.io.Closeable;
 import java.util.HashMap;
 import java.util.Map;
 
-public interface MqAdmin{   
+public interface MqAdmin extends Closeable{   
 	
 	MqFuture<Topic> declareTopic(TopicDeclare ctrl); 
 	MqFuture<Boolean> removeTopic(TopicRemove ctrl);  

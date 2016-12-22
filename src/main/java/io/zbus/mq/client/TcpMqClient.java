@@ -17,13 +17,13 @@ import io.zbus.net.Future;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
 
-public class MqTcpClient extends MessageClient implements MqClient {
+public class TcpMqClient extends MessageClient implements MqClient {
 	 //private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class);  
 	
 	private Auth auth;
 	private Map<String, ConsumeGroup> consumeGroups = new ConcurrentHashMap<String, ConsumeGroup>();
 	
-	public MqTcpClient(String address, IoDriver driver) {
+	public TcpMqClient(String address, IoDriver driver) {
 		super(address, driver); 
 	}
 
@@ -35,17 +35,7 @@ public class MqTcpClient extends MessageClient implements MqClient {
 			message.setToken(auth.token);
 		}
 	}
-	 
-	@Override
-	public MqFuture<ProduceResult> produce(Message message) {
-		message.setCmd(Protocol.PRODUCE);
-		if(message.getAck() == false){
-			send(message); 
-		} else {
-			//Future<Message> res = invoke(message);
-		} 
-		return null;
-	} 
+	  
 	
 	private String key(String topic, String consumeGroup){
 		String key = topic + "-->";
@@ -53,6 +43,11 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		return key;
 	}
 
+	@Override
+	public MqFuture<ProduceResult> produce(Message message) {
+		return null;
+	}
+	
 	@Override
 	public MqFuture<ConsumeResult> consume(ConsumerHandler handler) {
 		String key = key(handler.topic(), handler.consumeGroup());
@@ -168,5 +163,5 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		String consumeGroup;
 		final AtomicInteger window = new AtomicInteger(maxInFlightMessage);
 		ConsumerHandler handler; 
-	}
+	} 
 }

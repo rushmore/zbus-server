@@ -6,7 +6,6 @@ import io.zbus.mq.api.MqAdmin.ChannelDeclare;
 import io.zbus.mq.api.MqAdmin.Topic;
 import io.zbus.mq.api.MqAdmin.TopicDeclare;
 import io.zbus.mq.api.MqClient;
-import io.zbus.mq.api.MqClient.ConsumeCtrl;
 import io.zbus.mq.api.MqFuture;
 import io.zbus.net.IoDriver;
  
@@ -15,7 +14,7 @@ public class MqClientTest {
 	public static void main(String[] args) throws Exception {
 		IoDriver ioDriver = new IoDriver();
 		
-		final MqClient client = new MqTcpClient("localhost:8080", ioDriver);  
+		final MqClient client = new TcpMqClient("localhost:8080", ioDriver);  
 		client.configAuth(new Auth());
 		
 		TopicDeclare topicDeclare = new TopicDeclare();
@@ -31,13 +30,7 @@ public class MqClientTest {
 		channelDeclare.exclusive = true;
 		channelDeclare.deleteOnExit = true; 
 		MqFuture<Channel> mf = client.declareChannel(channelDeclare);
-		System.out.println(mf.get());
-		  
-		
-		ConsumeCtrl consumeCtrl = new ConsumeCtrl();
-		consumeCtrl.topic = "MyTopic";
-		consumeCtrl.consumeGroup = "MyChannel";   
-		 
+		System.out.println(mf.get()); 
 		 
 		
 		System.out.println("==done==");
