@@ -1,9 +1,13 @@
 package io.zbus.mq.client;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.alibaba.fastjson.JSON;
 
+import io.zbus.mq.api.ConsumerHandler;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
 import io.zbus.mq.api.MqFuture;
@@ -12,20 +16,12 @@ import io.zbus.mq.net.MessageClient;
 import io.zbus.net.Future;
 import io.zbus.net.IoDriver;
 import io.zbus.net.Session;
-import io.zbus.util.logger.Logger;
-import io.zbus.util.logger.LoggerFactory;
 
 public class MqTcpClient extends MessageClient implements MqClient {
-	private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class);  
-	
-	
-	
-	private AckHandler produceAckHandler;
-	private AckHandler consumeAckHandler;
-	private MessageHandler streamHandler;
-	private QuitHandler quitHandler;
+	 //private static final Logger log = LoggerFactory.getLogger(MqTcpClient.class);  
 	
 	private Auth auth;
+	private Map<String, ConsumeGroup> consumeGroups = new ConcurrentHashMap<String, ConsumeGroup>();
 	
 	public MqTcpClient(String address, IoDriver driver) {
 		super(address, driver); 
@@ -39,27 +35,7 @@ public class MqTcpClient extends MessageClient implements MqClient {
 			message.setToken(auth.token);
 		}
 	}
-	
-	@Override
-	public void onProduceAck(AckHandler handler) {
-		produceAckHandler = handler;
-	}
-	
-	@Override
-	public void onConsumeAck(AckHandler handler) {
-		consumeAckHandler = handler;
-	}
-
-	@Override
-	public void onMessage(MessageHandler handler) {
-		streamHandler = handler;
-	}
-
-	@Override
-	public void onQuit(QuitHandler handler) {
-		quitHandler = handler;
-	}
-
+	 
 	@Override
 	public MqFuture<ProduceResult> produce(Message message) {
 		message.setCmd(Protocol.PRODUCE);
@@ -69,23 +45,43 @@ public class MqTcpClient extends MessageClient implements MqClient {
 			//Future<Message> res = invoke(message);
 		} 
 		return null;
+	} 
+	
+	private String key(String topic, String consumeGroup){
+		String key = topic + "-->";
+		if(consumeGroup != null) key += consumeGroup;
+		return key;
 	}
 
 	@Override
-	public MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl) {
+	public MqFuture<ConsumeResult> consume(ConsumerHandler handler) {
+		String key = key(handler.topic(), handler.consumeGroup());
+		ConsumeGroup group = new ConsumeGroup();
+		group.topic = handler.topic();
+		group.consumeGroup = handler.consumeGroup();
+		group.handler = handler;
+		group.maxInFlightMessage = handler.maxInFlightMessage();
+		
+		consumeGroups.put(key, group); 
+		 
+		return null;
+	}
+ 
+
+	@Override
+	public MqFuture<ConsumeResult> cancelConsume(String topic, String consumeGroup) {
+		return null;
+	}
+
+	@Override
+	public MqFuture<ConsumeResult> cancelConsume(String topic) { 
 		return null;
 	}
 	
-	public MqFuture<ProduceResult> publish(Message message) {
-		return null;
-	}
-	
-	public void subscribe(String topic, String channel, MessageHandler handler){
+	@Override
+	public void ack(Message message) { 
 		
 	}
-	public void subscribe(String topic, MessageHandler handler){
-		
-	}  
 	
 	@Override
 	public void sessionData(Object data, Session sess) throws IOException { 
@@ -95,38 +91,17 @@ public class MqTcpClient extends MessageClient implements MqClient {
 		if(Protocol.RESPONSE.equalsIgnoreCase(cmd)){
 			boolean handled = handleInvokedMessage(data, sess);
 			if(handled) return; 
+		}  
+		
+		String topic = message.getTopic();
+		String consumeGroup = message.getConsumeGroup();
+		if(topic != null){
+			String key = key(topic, consumeGroup);
+			ConsumeGroup group = consumeGroups.get(key);
+			if(group != null){
+				
+			}
 		} 
-		
-		
-		if(Protocol.PRODUCE_ACK.equalsIgnoreCase(cmd)){
-			if(produceAckHandler != null){
-				produceAckHandler.onAck(message);
-				return;
-			}
-		}
-		
-		if(Protocol.CONSUME_ACK.equalsIgnoreCase(cmd)){
-			if(consumeAckHandler != null){
-				consumeAckHandler.onAck(message);
-				return;
-			}
-		}
-		
-		if(Protocol.STREAM.equalsIgnoreCase(cmd)){
-			if(streamHandler != null){
-				streamHandler.onMessage(message);
-				return;
-			}
-		}
-		
-		if(Protocol.QUIT.equalsIgnoreCase(cmd)){
-			if(quitHandler != null){
-				quitHandler.onQuit(message);
-				return;
-			}
-		}
-		
-		log.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!Drop unsupported command(%s),msg=%s", cmd, message);
 	}
 
 	@Override
@@ -185,5 +160,13 @@ public class MqTcpClient extends MessageClient implements MqClient {
 			}
 		};
 		return future;
+	} 
+	
+	static class ConsumeGroup{
+		int maxInFlightMessage = 20;
+		String topic;
+		String consumeGroup;
+		final AtomicInteger window = new AtomicInteger(maxInFlightMessage);
+		ConsumerHandler handler; 
 	}
 }

@@ -2,29 +2,12 @@ package io.zbus.mq.api;
 
 import java.io.Closeable;
 
-public interface MqClient extends MqAdmin, Closeable{    
-     
-    void onProduceAck(AckHandler handler); 
-    void onConsumeAck(AckHandler handler);  
-	void onMessage(MessageHandler handler);  
-	void onQuit(QuitHandler handler); 
-	
+public interface MqClient extends MqAdmin, Closeable{     
 	MqFuture<ProduceResult> produce(Message message); 
-	MqFuture<ConsumeResult> consume(ConsumeCtrl ctrl);    
-	
-	
-	
-	public static interface AckHandler {
-		void onAck(Message message);
-	} 
-
-	public static interface MessageHandler {
-		void onMessage(Message message);
-	} 
-	
-	public static interface QuitHandler {
-		void onQuit(Message message);
-	}
+	MqFuture<ConsumeResult> consume(ConsumerHandler handler);    
+	MqFuture<ConsumeResult> cancelConsume(String topic, String consumeGroup);  
+	MqFuture<ConsumeResult> cancelConsume(String topic);  
+	void ack(Message message);
 	
 	public static class ProduceResult {
 		public boolean sendOk;
@@ -35,7 +18,8 @@ public interface MqClient extends MqAdmin, Closeable{
 	
 	public static class ConsumeCtrl {
 		public String topic;
-		public String channel; 
+		public String consumeGroup; 
+		public ConsumerHandler handler;
 		public int window = 1;
 		public Boolean ack;
 	}
