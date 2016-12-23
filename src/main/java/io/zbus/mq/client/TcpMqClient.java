@@ -23,7 +23,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	private static final Logger log = LoggerFactory.getLogger(TcpMqClient.class);  
 	
 	private Auth auth;
-	private Map<String, ConsumeContext> consumeContexts = new ConcurrentHashMap<String, ConsumeContext>();
+	private Map<String, ChannelContext> consumeContexts = new ConcurrentHashMap<String, ChannelContext>();
 	
 	public TcpMqClient(String address, IoDriver driver) {
 		super(address, driver); 
@@ -50,9 +50,9 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 	
 	@Override
-	public MqFuture<ConsumeResult> consume(Channel channel, ConsumeHandler handler) { 
+	public MqFuture<ConsumeResult> subscribe(Channel channel, ConsumeHandler handler) { 
 		String key = key(channel.getTopic(), channel.getChannel());
-		ConsumeContext consumeContext = new ConsumeContext(channel, handler);
+		ChannelContext consumeContext = new ChannelContext(channel, handler, this);
 		consumeContexts.put(key, consumeContext); 
 		
 		return ready(channel);
@@ -80,12 +80,12 @@ public class TcpMqClient extends MessageClient implements MqClient {
  
 
 	@Override
-	public MqFuture<ConsumeResult> cancelConsume(String topic, String channel) {
+	public MqFuture<ConsumeResult> unsubscribe(String topic, String channel) {
 		return null;
 	}
 
 	@Override
-	public MqFuture<ConsumeResult> cancelConsume(String topic) { 
+	public MqFuture<ConsumeResult> unsubscribe(String topic) { 
 		return null;
 	}
 	 
@@ -111,9 +111,9 @@ public class TcpMqClient extends MessageClient implements MqClient {
 			Integer window = message.getWindow();
 			if(topic != null){
 				String key = key(topic, consumeGroup);
-				ConsumeContext ctx = consumeContexts.get(key);
+				ChannelContext ctx = consumeContexts.get(key);
 				if(ctx != null){
-					ctx.consumeHandler.onMessage(this, ctx.channel, message);
+					ctx.consumeHandler.onMessage(ctx, message);
 					if(window == null){//now window info, ack every time
 						String msgid = message.getId();
 						Long offset = message.getOffset();
@@ -241,13 +241,4 @@ public class TcpMqClient extends MessageClient implements MqClient {
 		};
 		return future;
 	}  
-	
-	static class ConsumeContext{
-		final Channel channel;
-		ConsumeHandler consumeHandler;
-		public ConsumeContext(Channel channel, ConsumeHandler consumeHandler) {
-			this.channel = channel.clone(); 
-			this.consumeHandler = consumeHandler;
-		}
-	} 
 }

@@ -1,11 +1,11 @@
 package io.zbus.mq.api;
 
 public interface Consumer extends MqAdmin { 
-	MqFuture<ConsumeResult> consume(Channel consumeGroup, ConsumeHandler handler);  
-	MqFuture<ConsumeResult> ready(Channel consumeGroup);  
+	MqFuture<ConsumeResult> subscribe(Channel channel, ConsumeHandler handler);  
+	MqFuture<ConsumeResult> ready(Channel channel);  
 	
-	MqFuture<ConsumeResult> cancelConsume(String topic, String consumeGroup);  
-	MqFuture<ConsumeResult> cancelConsume(String topic);  
+	MqFuture<ConsumeResult> unsubscribe(String topic, String channel);  
+	MqFuture<ConsumeResult> unsubscribe(String topic);  
 	
 	public static class ConsumeResult {
 		public boolean sendOk;

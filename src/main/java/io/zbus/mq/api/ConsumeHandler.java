@@ -1,8 +1,10 @@
 package io.zbus.mq.api;
 
+import io.zbus.mq.api.MqClient.ChannelContext;
+
 public interface ConsumeHandler { 
 	
-	void onMessage(MqClient client, Channel consumeGroup, Message message); 
+	void onMessage(ChannelContext ctx, Message message); 
 
-	void onQuit(MqClient client, Channel consumeGroup, Message message);
+	void onQuit(ChannelContext ctx, Message message);
 }
