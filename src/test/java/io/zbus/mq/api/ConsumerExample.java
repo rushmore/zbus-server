@@ -13,7 +13,7 @@ public class ConsumerExample {
 		final MqClient client = new TcpMqClient("localhost:8080", ioDriver);  
 		client.configAuth(new Auth());
 		
-		client.consume(new ConsumerHandler() { 
+		client.consume(new ConsumeHandler() { 
 			@Override
 			public String topic() { 
 				return "MyTopic";

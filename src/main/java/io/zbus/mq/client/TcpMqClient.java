@@ -3,11 +3,10 @@ package io.zbus.mq.client;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.alibaba.fastjson.JSON;
 
-import io.zbus.mq.api.ConsumerHandler;
+import io.zbus.mq.api.ConsumeGroup;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
 import io.zbus.mq.api.MqFuture;
@@ -49,15 +48,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 	
 	@Override
-	public MqFuture<ConsumeResult> consume(ConsumerHandler handler) {
-		String key = key(handler.topic(), handler.consumeGroup());
-		ConsumeGroup group = new ConsumeGroup();
-		group.topic = handler.topic();
-		group.consumeGroup = handler.consumeGroup();
-		group.handler = handler;
-		group.maxInFlightMessage = handler.maxInFlightMessage();
-		
-		consumeGroups.put(key, group); 
+	public MqFuture<ConsumeResult> consume(ConsumeGroup consumeGroup) { 
 		 
 		return null;
 	}
@@ -155,13 +146,5 @@ public class TcpMqClient extends MessageClient implements MqClient {
 			}
 		};
 		return future;
-	} 
-	
-	static class ConsumeGroup{
-		int maxInFlightMessage = 20;
-		String topic;
-		String consumeGroup;
-		final AtomicInteger window = new AtomicInteger(maxInFlightMessage);
-		ConsumerHandler handler; 
-	} 
+	}  
 }

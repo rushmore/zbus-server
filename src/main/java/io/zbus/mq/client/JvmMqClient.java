@@ -2,7 +2,7 @@ package io.zbus.mq.client;
 
 import java.io.IOException;
 
-import io.zbus.mq.api.ConsumerHandler;
+import io.zbus.mq.api.ConsumeGroup;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
 import io.zbus.mq.api.MqFuture;
@@ -62,13 +62,7 @@ public class JvmMqClient implements MqClient {
 		// TODO Auto-generated method stub
 		
 	}
-
-	@Override
-	public MqFuture<ConsumeResult> consume(ConsumerHandler handler) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
+ 
 	@Override
 	public MqFuture<ConsumeResult> cancelConsume(String topic, String consumeGroup) {
 		// TODO Auto-generated method stub
@@ -85,6 +79,12 @@ public class JvmMqClient implements MqClient {
 	public void ack(Message message) {
 		// TODO Auto-generated method stub
 		
+	}
+
+	@Override
+	public MqFuture<ConsumeResult> consume(ConsumeGroup consumeGroup) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 	 
 }
