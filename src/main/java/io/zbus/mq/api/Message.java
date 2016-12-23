@@ -39,7 +39,9 @@ public class Message {
 	public static final String ID          = "id";
 	public static final String SENDER      = "sender";
 	public static final String RECEIVER    = "receiver";
-	public static final String WINDOW      = "window";
+	public static final String WINDOW 	   = "window";
+	public static final String OFFSET 	   = "offset";
+	public static final String MAX_IN_FLIGHT = "max-in-flight";
 	public static final String BATCH_SIZE  = "batch-size";
 	public static final String BATCH_IN_TX = "batch-in-tx";  
 	public static final String ENCODING    = "encoding";
@@ -141,6 +143,24 @@ public class Message {
 
 	public void setWindow(Integer value) {
 		setHeader(WINDOW, String.valueOf(value));
+	}
+	
+	public Long getOffset() {
+		String value = getHeader(OFFSET);
+		return value == null ? null : Long.valueOf(value);
+	}
+
+	public void setOffset(Long value) {
+		setHeader(OFFSET, String.valueOf(value));
+	}
+	
+	public Integer getMaxInFlight() {
+		String value = getHeader(MAX_IN_FLIGHT);
+		return value == null ? null : Integer.valueOf(value);
+	}
+
+	public void setMaxInFlight(Integer value) {
+		setHeader(MAX_IN_FLIGHT, String.valueOf(value));
 	}
 
 	public Integer getBatchSize() {
