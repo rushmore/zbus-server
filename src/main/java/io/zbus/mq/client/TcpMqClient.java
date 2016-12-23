@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.alibaba.fastjson.JSON;
 
-import io.zbus.mq.api.ConsumeGroup;
+import io.zbus.mq.api.Channel;
 import io.zbus.mq.api.ConsumeHandler;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
@@ -50,23 +50,23 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 	
 	@Override
-	public MqFuture<ConsumeResult> consume(ConsumeGroup consumeGroup, ConsumeHandler handler) { 
-		String key = key(consumeGroup.getTopic(), consumeGroup.getConsumeGroup());
-		ConsumeContext consumeContext = new ConsumeContext(consumeGroup, handler);
+	public MqFuture<ConsumeResult> consume(Channel channel, ConsumeHandler handler) { 
+		String key = key(channel.getTopic(), channel.getChannel());
+		ConsumeContext consumeContext = new ConsumeContext(channel, handler);
 		consumeContexts.put(key, consumeContext); 
 		
-		return ready(consumeGroup);
+		return ready(channel);
 	}
 	
 	
 	@Override
-	public MqFuture<ConsumeResult> ready(ConsumeGroup consumeGroup) {
+	public MqFuture<ConsumeResult> ready(Channel channel) {
 		Message message = new Message();
 		fillCommonHeaders(message);
 		message.setCmd(Protocol.CONSUME); 
-		message.setTopic(consumeGroup.getTopic());
-		message.setConsumeGroup(consumeGroup.getConsumeGroup());
-		message.setMaxInFlight(consumeGroup.getMaxInFlight()); 
+		message.setTopic(channel.getTopic());
+		message.setChannel(channel.getChannel());
+		message.setMaxInFlight(channel.getMaxInFlight()); 
 		
 		MqFuture<ConsumeResult> res = new DefaultMqFuture<ConsumeResult, Message>(invoke(message)){
 			@Override
@@ -80,7 +80,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
  
 
 	@Override
-	public MqFuture<ConsumeResult> cancelConsume(String topic, String consumeGroup) {
+	public MqFuture<ConsumeResult> cancelConsume(String topic, String channel) {
 		return null;
 	}
 
@@ -107,20 +107,20 @@ public class TcpMqClient extends MessageClient implements MqClient {
 		
 		if(Protocol.STREAM.equalsIgnoreCase(cmd)){
 			String topic = message.getTopic();
-			String consumeGroup = message.getConsumeGroup();
+			String consumeGroup = message.getChannel();
 			Integer window = message.getWindow();
 			if(topic != null){
 				String key = key(topic, consumeGroup);
 				ConsumeContext ctx = consumeContexts.get(key);
 				if(ctx != null){
-					ctx.consumeHandler.onMessage(this, ctx.consumeGroup, message);
+					ctx.consumeHandler.onMessage(this, ctx.channel, message);
 					if(window == null){//now window info, ack every time
 						String msgid = message.getId();
 						Long offset = message.getOffset();
 						ack(msgid, offset);
 					} else {
-						if(window<25*ctx.consumeGroup.getMaxInFlight()/100){
-							ready(ctx.consumeGroup);
+						if(window<25*ctx.channel.getMaxInFlight()/100){
+							ready(ctx.channel);
 						}
 					} 
 				}
@@ -186,42 +186,42 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 
 	@Override
-	public MqFuture<ConsumeGroupDetails> declareConsumeGroup(ConsumeGroupDeclare ctrl) {
-		return jsonInvoke(ctrl, Protocol.DECLARE_CONSUME_GROUP, ConsumeGroupDetails.class);
+	public MqFuture<ChannelDetails> declareChannel(ChannelDeclare ctrl) {
+		return jsonInvoke(ctrl, Protocol.DECLARE_CONSUME_GROUP, ChannelDetails.class);
 	}
 	
 	@Override
-	public MqFuture<ConsumeGroupDetails> declareConsumeGroup(String topic, String consumeGroup) {
-		ConsumeGroupDeclare ctrl = new ConsumeGroupDeclare();
+	public MqFuture<ChannelDetails> declareChannel(String topic, String channel) {
+		ChannelDeclare ctrl = new ChannelDeclare();
 		ctrl.topic = topic;
-		ctrl.consumeGroup = consumeGroup;
-		return declareConsumeGroup(ctrl);
+		ctrl.channel = channel;
+		return declareChannel(ctrl);
 	}
 
 	@Override
-	public MqFuture<Boolean> removeConsumeGroup(ConsumeGroupRemove ctrl) {
+	public MqFuture<Boolean> removeChannel(ChannelRemove ctrl) {
 		return jsonInvoke(ctrl, Protocol.REMOVE_CONSUME_GROUP, Boolean.class); 
 	}
 	
 	@Override
-	public MqFuture<Boolean> removeConsumeGroup(String topic, String consumeGroup) {
-		ConsumeGroupRemove ctrl = new ConsumeGroupRemove();
+	public MqFuture<Boolean> removeChannel(String topic, String channel) {
+		ChannelRemove ctrl = new ChannelRemove();
 		ctrl.topic = topic;
-		ctrl.consumeGroup = consumeGroup;
-		return removeConsumeGroup(ctrl);
+		ctrl.channel = channel;
+		return removeChannel(ctrl);
 	}
 
 	@Override
-	public MqFuture<ConsumeGroupDetails> queryConsumeGroup(ConsumeGroupQuery ctrl) {
-		return jsonInvoke(ctrl, Protocol.QUERY_CONSUME_GROUP, ConsumeGroupDetails.class);
+	public MqFuture<ChannelDetails> queryChannel(ChannelQuery ctrl) {
+		return jsonInvoke(ctrl, Protocol.QUERY_CONSUME_GROUP, ChannelDetails.class);
 	} 
 
 	@Override
-	public MqFuture<ConsumeGroupDetails> queryConsumeGroup(String topic, String consumeGroup) {
-		ConsumeGroupQuery ctrl = new ConsumeGroupQuery();
+	public MqFuture<ChannelDetails> queryChannel(String topic, String channel) {
+		ChannelQuery ctrl = new ChannelQuery();
 		ctrl.topic = topic;
-		ctrl.consumeGroup = consumeGroup;
-		return queryConsumeGroup(ctrl);
+		ctrl.channel = channel;
+		return queryChannel(ctrl);
 	}
  
 	private <V> MqFuture<V> jsonInvoke(Object ctrl, String cmd, final Class<V> clazz){
@@ -243,10 +243,10 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}  
 	
 	static class ConsumeContext{
-		final ConsumeGroup consumeGroup;
+		final Channel channel;
 		ConsumeHandler consumeHandler;
-		public ConsumeContext(ConsumeGroup consumeGroup, ConsumeHandler consumeHandler) {
-			this.consumeGroup = consumeGroup.clone(); 
+		public ConsumeContext(Channel channel, ConsumeHandler consumeHandler) {
+			this.channel = channel.clone(); 
 			this.consumeHandler = consumeHandler;
 		}
 	} 

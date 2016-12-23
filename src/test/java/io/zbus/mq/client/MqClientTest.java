@@ -1,8 +1,8 @@
 package io.zbus.mq.client;
  
 import io.zbus.mq.api.MqAdmin.Auth;
-import io.zbus.mq.api.MqAdmin.ConsumeGroupDetails;
-import io.zbus.mq.api.MqAdmin.ConsumeGroupDeclare;
+import io.zbus.mq.api.MqAdmin.ChannelDetails;
+import io.zbus.mq.api.MqAdmin.ChannelDeclare;
 import io.zbus.mq.api.MqAdmin.Topic;
 import io.zbus.mq.api.MqAdmin.TopicDeclare;
 import io.zbus.mq.api.MqClient;
@@ -24,12 +24,12 @@ public class MqClientTest {
 		System.out.println(res.get()); 
 		
 		
-		ConsumeGroupDeclare channelDeclare = new ConsumeGroupDeclare();
+		ChannelDeclare channelDeclare = new ChannelDeclare();
 		channelDeclare.topic = "MyTopic";
-		channelDeclare.consumeGroup = "default";
+		channelDeclare.channel = "default";
 		channelDeclare.exclusive = true;
 		channelDeclare.deleteOnExit = true; 
-		MqFuture<ConsumeGroupDetails> mf = client.declareConsumeGroup(channelDeclare);
+		MqFuture<ChannelDetails> mf = client.declareChannel(channelDeclare);
 		System.out.println(mf.get()); 
 		 
 		

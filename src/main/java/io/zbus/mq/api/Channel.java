@@ -1,15 +1,15 @@
 package io.zbus.mq.api;
 
-public class ConsumeGroup implements Cloneable {
+public class Channel implements Cloneable {
 	private int maxInFlight = 100;
 	private final String topic;
-	private final String consumeGroup;    
+	private final String channel;    
 	
-	public ConsumeGroup(String topic, String consumeGroup){
+	public Channel(String topic, String channel){
 		this.topic = topic;
-		this.consumeGroup = consumeGroup;
+		this.channel = channel;
 	}
-	public ConsumeGroup(String topic){
+	public Channel(String topic){
 		this(topic, null);
 	} 
 	
@@ -23,14 +23,14 @@ public class ConsumeGroup implements Cloneable {
 	public String getTopic() {
 		return topic;
 	}
-	public String getConsumeGroup() {
-		return consumeGroup;
+	public String getChannel() {
+		return channel;
 	} 
 	
 	@Override
-	public ConsumeGroup clone() { 
+	public Channel clone() { 
 		try {
-			return (ConsumeGroup)super.clone();
+			return (Channel)super.clone();
 		} catch (CloneNotSupportedException e) {
 			//ignore
 		}

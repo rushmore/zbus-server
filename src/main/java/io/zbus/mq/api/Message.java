@@ -31,7 +31,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 public class Message {
 	public static final String CMD         = "cmd"; 
 	public static final String TOPIC       = "topic";
-	public static final String CONSUME_GROUP     = "consume-group";
+	public static final String CHANNEL     = "channel";
 	public static final String APPID       = "appid";
 	public static final String TOKEN       = "token";
 	public static final String ACK         = "ack";
@@ -71,12 +71,12 @@ public class Message {
 		setHeader(TOPIC, value);
 	} 
 
-	public String getConsumeGroup() {
-		return getHeader(CONSUME_GROUP);
+	public String getChannel() {
+		return getHeader(CHANNEL);
 	}
 
-	public void setConsumeGroup(String value) {
-		setHeader(CONSUME_GROUP, value);
+	public void setChannel(String value) {
+		setHeader(CHANNEL, value);
 	}
 
 	public String getAppId() {

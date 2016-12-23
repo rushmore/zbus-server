@@ -15,17 +15,17 @@ public class ConsumerExample {
 		 
 		
 		consumer.declareTopic("MyTopic");   
-		ConsumeGroup group = new ConsumeGroup("MyTopic");  
+		Channel group = new Channel("MyTopic");  
 		group.setMaxInFlight(10);  
 		
 		ConsumeHandler consumeHandler = new ConsumeHandler() { 
 			@Override
-			public void onQuit(MqClient client, ConsumeGroup consumeGroup, Message message) {
+			public void onQuit(MqClient client, Channel consumeGroup, Message message) {
 				
 			}
 			
 			@Override
-			public void onMessage(MqClient client, ConsumeGroup consumeGroup, Message message) {
+			public void onMessage(MqClient client, Channel consumeGroup, Message message) {
 				
 			}
 		}; 

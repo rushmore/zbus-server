@@ -14,12 +14,12 @@ public interface MqAdmin extends Closeable{
 	MqFuture<Topic> queryTopic(String topic); 
 	MqFuture<Boolean> removeTopic(String topic); 
     
-	MqFuture<ConsumeGroupDetails> declareConsumeGroup(ConsumeGroupDeclare ctrl); 
-	MqFuture<Boolean> removeConsumeGroup(ConsumeGroupRemove ctrl);  
-	MqFuture<ConsumeGroupDetails> queryConsumeGroup(ConsumeGroupQuery ctrl);    
-	MqFuture<ConsumeGroupDetails> declareConsumeGroup(String topic, String consumeGroup); 
-	MqFuture<Boolean> removeConsumeGroup(String topic, String consumeGroup);  
-	MqFuture<ConsumeGroupDetails> queryConsumeGroup(String topic, String consumeGroup); 
+	MqFuture<ChannelDetails> declareChannel(ChannelDeclare ctrl); 
+	MqFuture<Boolean> removeChannel(ChannelRemove ctrl);  
+	MqFuture<ChannelDetails> queryChannel(ChannelQuery ctrl);    
+	MqFuture<ChannelDetails> declareChannel(String topic, String channel); 
+	MqFuture<Boolean> removeChannel(String topic, String channel);  
+	MqFuture<ChannelDetails> queryChannel(String topic, String channel); 
 	
 	void configAuth(Auth auth);
 	
@@ -56,19 +56,19 @@ public interface MqAdmin extends Closeable{
 	}
 	
 	
-	public static class ConsumeGroupDetails {
+	public static class ChannelDetails {
 		public String topic;
-		public String consumeGroup;
+		public String channel;
 		@Override
 		public String toString() {
-			return "ConsumeGroupDetails [topic=" + topic + ", channel=" + consumeGroup + "]";
+			return "ChannelDetails [topic=" + topic + ", channel=" + channel + "]";
 		} 
 		
 	}
 	
-	public static class ConsumeGroupDeclare {
+	public static class ChannelDeclare {
 		public String topic;
-		public String consumeGroup;
+		public String channel;
 		public String tag;
 		
 		public Boolean deleteOnExit;
@@ -78,13 +78,13 @@ public interface MqAdmin extends Closeable{
 		public Long consumeStartTime;  
 	} 
 	
-	public static class ConsumeGroupQuery {
+	public static class ChannelQuery {
 		public String topic;
-		public String consumeGroup; 
+		public String channel; 
 	}
 	
-	public static class ConsumeGroupRemove {
+	public static class ChannelRemove {
 		public String topic;
-		public String consumeGroup; 
+		public String channel; 
 	}
 }

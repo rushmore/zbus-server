@@ -5,7 +5,7 @@ import java.io.IOException;
 import com.alibaba.fastjson.JSON;
 
 import io.zbus.mq.api.Message;
-import io.zbus.mq.api.MqAdmin.ConsumeGroupDetails;
+import io.zbus.mq.api.MqAdmin.ChannelDetails;
 import io.zbus.mq.api.MqAdmin.Topic;
 import io.zbus.mq.api.Protocol;
 import io.zbus.mq.net.MessageAdaptor;
@@ -45,9 +45,9 @@ public class MqAdaptor extends MessageAdaptor {
 				res.setStatus(200);
 				res.setId(msg.getId());
 				
-				ConsumeGroupDetails channel = new ConsumeGroupDetails();
+				ChannelDetails channel = new ChannelDetails();
 				channel.topic = "MyTopic";
-				channel.consumeGroup = "default";
+				channel.channel = "default";
 				res.setJsonBody(JSON.toJSONBytes(channel));
 				session.write(res);
 			}
