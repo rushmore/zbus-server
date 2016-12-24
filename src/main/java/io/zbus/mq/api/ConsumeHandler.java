@@ -1,6 +1,6 @@
 package io.zbus.mq.api;
 
-import io.zbus.mq.api.MqClient.ChannelContext;
+import io.zbus.mq.api.Consumer.ChannelContext;
 
 public interface ConsumeHandler { 
 	

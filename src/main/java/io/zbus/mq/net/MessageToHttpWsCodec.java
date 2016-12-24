@@ -93,14 +93,14 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 				out.add(msg);
 			}
 			return;
-		}
-		
+		} 
 		//2) HTTP mode
 		if(!(obj instanceof HttpMessage)){
 			throw new IllegalArgumentException("HttpMessage object required: " + obj);
 		}
 		
-		HttpMessage httpMsg = (HttpMessage) obj;
+		HttpMessage httpMsg = (HttpMessage) obj; 
+		
 		Message msg = new Message();
 		Iterator<Entry<String, String>> iter = httpMsg.headers().iteratorAsString();
 		while (iter.hasNext()) {

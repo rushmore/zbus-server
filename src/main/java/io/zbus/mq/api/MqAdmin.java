@@ -1,25 +1,18 @@
 package io.zbus.mq.api;
 
 import java.io.Closeable;
-import java.util.HashMap;
-import java.util.Map;
 
 public interface MqAdmin extends Closeable{   
 	
-	MqFuture<Topic> declareTopic(TopicDeclare ctrl); 
-	MqFuture<Boolean> removeTopic(TopicRemove ctrl);  
-	MqFuture<Topic> queryTopic(TopicQuery ctrl);  
-	MqFuture<Topic> declareTopic(String topic, boolean rpcFlag); 
-	MqFuture<Topic> declareTopic(String topic);
+	MqFuture<Topic> declareTopic(String topic, Long flag); 
+	MqFuture<Topic> declareTopic(String topic); 
 	MqFuture<Topic> queryTopic(String topic); 
 	MqFuture<Boolean> removeTopic(String topic); 
     
-	MqFuture<ChannelDetails> declareChannel(ChannelDeclare ctrl); 
-	MqFuture<Boolean> removeChannel(ChannelRemove ctrl);  
-	MqFuture<ChannelDetails> queryChannel(ChannelQuery ctrl);    
-	MqFuture<ChannelDetails> declareChannel(String topic, String channel); 
-	MqFuture<Boolean> removeChannel(String topic, String channel);  
-	MqFuture<ChannelDetails> queryChannel(String topic, String channel); 
+	MqFuture<Channel> declareChannel(ChannelDeclare ctrl);  
+	MqFuture<Channel> declareChannel(String topic, String channel);  
+	MqFuture<Channel> queryChannel(String topic, String channel);     
+	MqFuture<Boolean> removeChannel(String topic, String channel);   
 	
 	void configAuth(Auth auth);
 	
@@ -29,62 +22,106 @@ public interface MqAdmin extends Closeable{
 	}
 	
 	public static class Topic {
-		public String name;
+		private String name;
+		private long flag;
+		
+		public String getName() {
+			return name;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
+
+		public long getFlag() {
+			return flag;
+		}
+
+		public void setFlag(long flag) {
+			this.flag = flag;
+		}
 
 		@Override
 		public String toString() {
-			return "Topic [name=" + name + "]";
+			return "Topic [name=" + name + ", flag=" + flag + "]";
+		}  
+		
+	} 
+	
+	public static class Channel {
+		private String topic;
+		private String channel; 
+		
+		public String getTopic() {
+			return topic;
+		}  
+		public void setTopic(String topic) {
+			this.topic = topic;
+		}  
+		public String getChannel() {
+			return channel;
+		} 
+		public void setChannel(String channel) {
+			this.channel = channel;
+		} 
+		@Override
+		public String toString() {
+			return "Channel [topic=" + topic + ", channel=" + channel + "]";
 		}  
 	}
 	
-	public static class TopicDeclare {
-		public String topic;
-		public Boolean rpcFlag;
-		public Map<String, String> properties = new HashMap<String, String>(); 
-	}
-	
-	public static class TopicQuery {
-		public String topic;
-		public String appId;
-		public Long createdTime; 
-	}
-	
-	public static class TopicRemove {
-		public String topic;
-		public String appId;
-		public Long createdTime; 
-	}
-	
-	
-	public static class ChannelDetails {
-		public String topic;
-		public String channel;
-		@Override
-		public String toString() {
-			return "ChannelDetails [topic=" + topic + ", channel=" + channel + "]";
-		} 
-		
-	}
-	
 	public static class ChannelDeclare {
-		public String topic;
-		public String channel;
-		public String tag;
+		private String topic;
+		private String channel;
+		private String tag;
 		
-		public Boolean deleteOnExit;
-		public Boolean exclusive;
+		private Boolean deleteOnExit;
+		private Boolean exclusive;
 		
-		public Long consumeStartOffset;
-		public Long consumeStartTime;  
-	} 
-	
-	public static class ChannelQuery {
-		public String topic;
-		public String channel; 
-	}
-	
-	public static class ChannelRemove {
-		public String topic;
-		public String channel; 
-	}
+		private Long consumeStartOffset;
+		private Long consumeStartTime;
+		
+		public String getTopic() {
+			return topic;
+		}
+		public void setTopic(String topic) {
+			this.topic = topic;
+		}
+		public String getChannel() {
+			return channel;
+		}
+		public void setChannel(String channel) {
+			this.channel = channel;
+		}
+		public String getTag() {
+			return tag;
+		}
+		public void setTag(String tag) {
+			this.tag = tag;
+		}
+		public Boolean getDeleteOnExit() {
+			return deleteOnExit;
+		}
+		public void setDeleteOnExit(Boolean deleteOnExit) {
+			this.deleteOnExit = deleteOnExit;
+		}
+		public Boolean getExclusive() {
+			return exclusive;
+		}
+		public void setExclusive(Boolean exclusive) {
+			this.exclusive = exclusive;
+		}
+		public Long getConsumeStartOffset() {
+			return consumeStartOffset;
+		}
+		public void setConsumeStartOffset(Long consumeStartOffset) {
+			this.consumeStartOffset = consumeStartOffset;
+		}
+		public Long getConsumeStartTime() {
+			return consumeStartTime;
+		}
+		public void setConsumeStartTime(Long consumeStartTime) {
+			this.consumeStartTime = consumeStartTime;
+		}   
+	}  
 }

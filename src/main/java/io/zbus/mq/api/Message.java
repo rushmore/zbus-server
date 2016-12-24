@@ -187,12 +187,12 @@ public class Message {
 		return headers.get(key);
 	}
 
-	public void setHeader(String key, String value) {
+	public void setHeader(String key, Object value) {
 		if(key == null){
 			throw new IllegalArgumentException("key must not be null");
 		} 
 		if(value == null) return;
-		headers.put(key, value); 
+		headers.put(key, value+""); 
 	}
 
 	public Map<String, String> getHeaders() {
