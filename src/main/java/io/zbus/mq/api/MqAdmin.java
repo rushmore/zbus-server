@@ -4,15 +4,15 @@ import java.io.Closeable;
 
 public interface MqAdmin extends Closeable{   
 	
-	MqFuture<Topic> declareTopic(String topic, Long flag); 
-	MqFuture<Topic> declareTopic(String topic); 
-	MqFuture<Topic> queryTopic(String topic); 
-	MqFuture<Boolean> removeTopic(String topic); 
+	Future<Topic> declareTopic(String topic, Long flag); 
+	Future<Topic> declareTopic(String topic); 
+	Future<Topic> queryTopic(String topic); 
+	Future<Boolean> removeTopic(String topic); 
     
-	MqFuture<Channel> declareChannel(ChannelDeclare ctrl);  
-	MqFuture<Channel> declareChannel(String topic, String channel);  
-	MqFuture<Channel> queryChannel(String topic, String channel);     
-	MqFuture<Boolean> removeChannel(String topic, String channel);   
+	Future<Channel> declareChannel(ChannelDeclare ctrl);  
+	Future<Channel> declareChannel(String topic, String channel);  
+	Future<Channel> queryChannel(String topic, String channel);     
+	Future<Boolean> removeChannel(String topic, String channel);   
 	
 	void configAuth(Auth auth);
 	

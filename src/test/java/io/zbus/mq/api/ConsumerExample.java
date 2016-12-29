@@ -16,21 +16,14 @@ public class ConsumerExample {
 		
 		consumer.declareTopic("MyTopic");   
 		
-		ConsumeHandler consumeHandler = new ConsumeHandler() {
+		ConsumeHandler consumeHandler = new ConsumeHandler() {  
 			@Override
-			public void onQuit(ChannelContext ctx, Message message) {
-				
-			}
-			
-			@Override
-			public void onMessage(ChannelContext ctx, Message message) {   
-				
+			public void onMessage(ChannelContext ctx, Message message) {  
 				
 				ctx.client.ack(message.getId(), message.getOffset());
 			}
 		}; 
-		
-		consumer.subscribe("MyTopic", consumeHandler);  
+		  
 		consumer.unsubscribe("MyTopic");
 	}
 

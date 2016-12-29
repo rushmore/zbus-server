@@ -1,7 +1,7 @@
 package io.zbus.mq.api;
 
 public interface Producer extends MqAdmin {  
-	MqFuture<ProduceResult> produce(Message message);
+	Future<ProduceResult> produce(Message message);
 	
 	public static class ProduceResult {
 		public boolean sendOk;

@@ -6,11 +6,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import io.zbus.mq.api.MqFuture;
-import io.zbus.mq.api.MqFutureListener; 
+import io.zbus.mq.api.Future;
+import io.zbus.mq.api.FutureListener; 
  
 
-class DefaultMqFuture<V, W> implements MqFuture<V> {  
+class DefaultMqFuture<V, W> implements Future<V> {  
 	private Map<Object, Object> listenerMap = new ConcurrentHashMap<Object, Object>();
 	protected final io.zbus.net.Future<W> support;
 	
@@ -59,7 +59,7 @@ class DefaultMqFuture<V, W> implements MqFuture<V> {
 	}
 
 	@Override
-	public MqFuture<V> addListener(final MqFutureListener<V> listener) { 
+	public Future<V> addListener(final FutureListener<V> listener) { 
 		io.zbus.net.FutureListener<W> supportListener = new io.zbus.net.FutureListener<W>() {   
 			@Override
 			public void operationComplete(io.zbus.net.Future<W> future) throws Exception {
@@ -72,7 +72,7 @@ class DefaultMqFuture<V, W> implements MqFuture<V> {
 	}
 
 	@Override
-	public MqFuture<V> removeListener(MqFutureListener<V> listener) {
+	public Future<V> removeListener(FutureListener<V> listener) {
 		@SuppressWarnings("unchecked")
 		io.zbus.net.FutureListener<W> supportListener = (io.zbus.net.FutureListener<W>) listenerMap.get(listener); 
 		if(supportListener == null){
@@ -83,25 +83,25 @@ class DefaultMqFuture<V, W> implements MqFuture<V> {
 	}
 
 	@Override
-	public MqFuture<V> sync() throws InterruptedException {
+	public Future<V> sync() throws InterruptedException {
 		support.sync();
 		return this;
 	}
 
 	@Override
-	public MqFuture<V> syncUninterruptibly() {
+	public Future<V> syncUninterruptibly() {
 		support.syncUninterruptibly();
 		return this;
 	}
 
 	@Override
-	public MqFuture<V> await() throws InterruptedException {
+	public Future<V> await() throws InterruptedException {
 		support.await();
 		return this;
 	}
 
 	@Override
-	public MqFuture<V> awaitUninterruptibly() {
+	public Future<V> awaitUninterruptibly() {
 		support.awaitUninterruptibly();
 		return this;
 	}

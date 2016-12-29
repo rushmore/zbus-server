@@ -5,8 +5,8 @@ import java.util.concurrent.CountDownLatch;
 import io.zbus.mq.api.MqAdmin.Auth;
 import io.zbus.mq.api.MqAdmin.Channel;
 import io.zbus.mq.api.MqClient;
-import io.zbus.mq.api.MqFuture;
-import io.zbus.mq.api.MqFutureListener;
+import io.zbus.mq.api.Future;
+import io.zbus.mq.api.FutureListener;
 import io.zbus.net.IoDriver;
  
 public class MqClientTest {
@@ -22,10 +22,10 @@ public class MqClientTest {
 		final CountDownLatch count = new CountDownLatch(total);
 		
 		for(int i=0;i<total;i++){
-			MqFuture<Channel> mf = client.declareChannel("MyTopic", "default");
-			mf.addListener(new MqFutureListener<Channel>() { 
+			Future<Channel> mf = client.declareChannel("MyTopic", "default");
+			mf.addListener(new FutureListener<Channel>() { 
 				@Override
-				public void operationComplete(MqFuture<Channel> future) throws Exception {
+				public void operationComplete(Future<Channel> future) throws Exception {
 					count.countDown();
 				}
 			});

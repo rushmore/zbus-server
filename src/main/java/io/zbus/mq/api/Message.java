@@ -34,7 +34,7 @@ public class Message {
 	public static final String CHANNEL     = "channel";
 	public static final String APPID       = "appid";
 	public static final String TOKEN       = "token";
-	public static final String ACK         = "ack";
+	public static final String ACK         = "ack"; 
 	public static final String TAG         = "tag";
 	public static final String ID          = "id";
 	public static final String SENDER      = "sender";

@@ -6,14 +6,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.alibaba.fastjson.JSON;
 
-import io.zbus.mq.api.ConsumeHandler;
+import io.zbus.mq.api.Future;
 import io.zbus.mq.api.Message;
 import io.zbus.mq.api.MqClient;
-import io.zbus.mq.api.MqFuture;
 import io.zbus.mq.api.Protocol;
 import io.zbus.mq.net.MessageClient;
-import io.zbus.net.Future;
-import io.zbus.net.IoDriver;
+import io.zbus.net.IoDriver; 
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
 import io.zbus.util.logger.LoggerFactory;
@@ -29,33 +27,13 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 
 	@Override
-	public MqFuture<ProduceResult> produce(Message message) {
+	public Future<ProduceResult> produce(Message message) {
 		return null;
 	}
+	 
 	
 	@Override
-	public MqFuture<ConsumeResult> subscribe(String topic, String channel, int maxInFlight, ConsumeHandler handler) { 
-		String key = key(topic, channel);
-		ChannelContext ctx = new ChannelContext(topic, channel, handler, this);
-		ctx.maxInFlight = maxInFlight; 
-		
-		channelCtxMap.put(key, ctx); 
-		
-		return ready(topic, channel, maxInFlight);
-	}
-	
-	@Override
-	public MqFuture<ConsumeResult> subscribe(String topic, int maxInFlight, ConsumeHandler handler) {
-		return subscribe(topic, null, maxInFlight, handler);
-	}
-	
-	@Override
-	public MqFuture<ConsumeResult> subscribe(String topic, ConsumeHandler handler) {
-		return subscribe(topic, null, 10, handler);
-	}
-	
-	@Override
-	public MqFuture<ConsumeResult> ready(String topic, String channel, int maxInFlight) {
+	public Future<ConsumeResult> ready(String topic, String channel, int maxInFlight) {
 		Message message = new Message();
 		fillCommonHeaders(message);
 		message.setCmd(Protocol.CONSUME); 
@@ -63,7 +41,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
 		message.setChannel(channel);
 		message.setMaxInFlight(maxInFlight); 
 		
-		MqFuture<ConsumeResult> res = new DefaultMqFuture<ConsumeResult, Message>(invoke(message)){
+		Future<ConsumeResult> res = new DefaultMqFuture<ConsumeResult, Message>(invoke(message)){
 			@Override
 			public ConsumeResult convert(Message result) {
 				ConsumeResult res = new ConsumeResult(); 
@@ -75,12 +53,12 @@ public class TcpMqClient extends MessageClient implements MqClient {
  
 
 	@Override
-	public MqFuture<ConsumeResult> unsubscribe(String topic, String channel) {
+	public Future<ConsumeResult> unsubscribe(String topic, String channel) {
 		return null;
 	}
 
 	@Override
-	public MqFuture<ConsumeResult> unsubscribe(String topic) { 
+	public Future<ConsumeResult> unsubscribe(String topic) { 
 		return null;
 	}
 	 
@@ -119,19 +97,15 @@ public class TcpMqClient extends MessageClient implements MqClient {
 		
 		if(Protocol.STREAM.equalsIgnoreCase(cmd)){
 			String topic = message.getTopic();
-			String consumeGroup = message.getChannel();
-			Integer window = message.getWindow();
+			String channel = message.getChannel();
+			Integer window = message.getWindow(); 
 			if(topic != null){
-				String key = key(topic, consumeGroup);
+				String key = key(topic, channel);
 				ChannelContext ctx = channelCtxMap.get(key);
 				if(ctx != null){
-					ctx.handler.onMessage(ctx, message);
-					if(window == null){//now window info, ack every time
-						String msgid = message.getId();
-						Long offset = message.getOffset();
-						ack(msgid, offset);
-					} else {
-						if(window<25*ctx.maxInFlight/100){
+					ctx.handler.onMessage(ctx, message); 
+					if(ctx.autoAck){
+						if(window == null || window<=25*ctx.maxInFlight/100){
 							ready(ctx.topic, ctx.channel, ctx.maxInFlight);
 						}
 					} 
@@ -156,14 +130,14 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	} 
 	 
 	@Override
-	public MqFuture<Topic> declareTopic(String topic, Long flag) {
+	public Future<Topic> declareTopic(String topic, Long flag) {
 		Message message = new Message();
 		fillCommonHeaders(message);
 		message.setCmd(Protocol.DECLARE_TOPIC);
 		message.setTopic(topic); 
 		message.setHeader("flag", ""+flag); 
 		
-		Future<Message> res = invoke(message);   
+		io.zbus.net.Future<Message> res = invoke(message);   
 		
 		DefaultMqFuture<Topic, Message> future = new DefaultMqFuture<Topic, Message>(res){
 			@Override
@@ -175,22 +149,22 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 	
 	@Override
-	public MqFuture<Topic> declareTopic(String topic) {
+	public Future<Topic> declareTopic(String topic) {
 		return declareTopic(topic, null);
 	}
 	
 	@Override
-	public MqFuture<Topic> queryTopic(String topic) {
+	public Future<Topic> queryTopic(String topic) {
 		return null;
 	}
   
 	@Override
-	public MqFuture<Boolean> removeTopic(String topic) { 
+	public Future<Boolean> removeTopic(String topic) { 
 		return null;
 	} 
 
 	@Override
-	public MqFuture<Channel> declareChannel(ChannelDeclare ctrl) {
+	public Future<Channel> declareChannel(ChannelDeclare ctrl) {
 		Message message = new Message();
 		fillCommonHeaders(message);
 		message.setCmd(Protocol.DECLARE_CHANNEL);
@@ -203,7 +177,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
 		message.setHeader("consumeStartOffset", ctrl.getConsumeStartOffset());
 		message.setHeader("consumeStartTime", ctrl.getConsumeStartTime());
 		
-		Future<Message> res = invoke(message);   
+		io.zbus.net.Future<Message> res = invoke(message);   
 		
 		DefaultMqFuture<Channel, Message> future = new DefaultMqFuture<Channel, Message>(res){
 			@Override
@@ -215,7 +189,7 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 	
 	@Override
-	public MqFuture<Channel> declareChannel(String topic, String channel) {
+	public Future<Channel> declareChannel(String topic, String channel) {
 		ChannelDeclare ctrl = new ChannelDeclare();
 		ctrl.setTopic(topic);
 		ctrl.setChannel(channel);
@@ -223,12 +197,12 @@ public class TcpMqClient extends MessageClient implements MqClient {
 	}
 	  
 	@Override
-	public MqFuture<Channel> queryChannel(String topic, String channel) {
+	public Future<Channel> queryChannel(String topic, String channel) {
 		return null;
 	}
 	
 	@Override
-	public MqFuture<Boolean> removeChannel(String topic, String channel) {
+	public Future<Boolean> removeChannel(String topic, String channel) {
 		return null;
 	}  
 	
