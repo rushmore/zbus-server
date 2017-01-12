@@ -1,4 +1,4 @@
-package io.zbus.mq.api;
+package io.zbus.mq;
 
 import java.util.concurrent.TimeUnit;
 

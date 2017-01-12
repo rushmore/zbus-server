@@ -1,23 +1,23 @@
 package io.zbus.mq.net;
  
-import io.zbus.mq.api.Message;
 import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
-import io.zbus.net.IoDriver;
+import io.zbus.mq.Message;
+import io.zbus.net.EventDriver;
  
 public class MessageClientTest {
  
 	public static void main(String[] args) throws Exception {
-		IoDriver ioDriver = new IoDriver();
+		EventDriver ioDriver = new EventDriver();
 		
 		MessageClient client = new MessageClient("localhost:8080", ioDriver);   
 		
 		for(int i=0; i<10; i++){  
 			Message message = new Message();
 			message.setCmd("produce");
-			message.setTopic("Hong");
-			message.setHeader("mq", "hong");
-			Future<Message> res = client.invoke(message);   
+			message.setMq("Hong"); 
+			Future<Message> res = client.invoke(message);    
+			
 			res.addListener(new FutureListener<Message>() {
 				
 				@Override

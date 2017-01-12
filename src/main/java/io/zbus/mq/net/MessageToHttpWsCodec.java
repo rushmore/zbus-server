@@ -1,7 +1,5 @@
 package io.zbus.mq.net;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -30,14 +28,14 @@ import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker;
 import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory;
 import io.netty.handler.ssl.SslHandler;
-import io.zbus.mq.api.Message;
+import io.zbus.mq.Message;
 import io.zbus.util.logger.Logger;
 import io.zbus.util.logger.LoggerFactory;
 
 /**
  * Object -- HttpRequest/HttpResponse(HttpMessage) Message -- Zbus Message
  * 
- * @author Rushmore
+ * @author rushmore (洪磊明)
  *
  */
 public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message> {
@@ -50,7 +48,7 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 	protected void encode(ChannelHandlerContext ctx, Message msg, List<Object> out) throws Exception {
 		//1) WebSocket mode
 		if(handshaker != null){//websocket stepped in, Message To WebSocketFrame
-			ByteBuf buf = serialize(msg);
+			ByteBuf buf = Unpooled.wrappedBuffer(msg.toBytes());
 			WebSocketFrame frame = new TextWebSocketFrame(buf);
 			out.add(frame);
 			return;
@@ -59,23 +57,15 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 		//2) HTTP mode
 		FullHttpMessage httpMsg = null;
 		if (msg.getStatus() == null) {// as request
-			String method = msg.getMethod();
-			if(method == null) method = "GET"; //default
-			String url = msg.getUrl();
-			if(url == null) url = "/";
-			httpMsg = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.valueOf(method), url);
+			httpMsg = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.valueOf(msg.getMethod()),
+					msg.getUrl());
 		} else {// as response
 			httpMsg = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
 					HttpResponseStatus.valueOf(Integer.valueOf(msg.getStatus())));
 		}
 
-		int contentLength = 0;
-		if(msg.getBody() != null){
-			contentLength = msg.getBody().length;
-		}
-		httpMsg.headers().add(HttpHeaderNames.CONTENT_LENGTH, ""+contentLength);
-		for (Entry<String, String> e : msg.getHeaders().entrySet()) {
-			httpMsg.headers().add(e.getKey(), e.getValue());
+		for (Entry<String, String> e : msg.getHead().entrySet()) {
+			httpMsg.headers().add(e.getKey().toLowerCase(), e.getValue());
 		}
 		if (msg.getBody() != null) {
 			httpMsg.content().writeBytes(msg.getBody());
@@ -93,19 +83,19 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 				out.add(msg);
 			}
 			return;
-		} 
+		}
+		
 		//2) HTTP mode
 		if(!(obj instanceof HttpMessage)){
 			throw new IllegalArgumentException("HttpMessage object required: " + obj);
 		}
 		
-		HttpMessage httpMsg = (HttpMessage) obj; 
-		
+		HttpMessage httpMsg = (HttpMessage) obj;
 		Message msg = new Message();
 		Iterator<Entry<String, String>> iter = httpMsg.headers().iteratorAsString();
 		while (iter.hasNext()) {
 			Entry<String, String> e = iter.next();
-			msg.setHeader(e.getKey().toLowerCase(), e.getValue());
+			msg.setHead(e.getKey().toLowerCase(), e.getValue());
 		}
 
 		if (httpMsg instanceof HttpRequest) {
@@ -167,17 +157,28 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 		
 		if (frame instanceof TextWebSocketFrame) {
 			TextWebSocketFrame textFrame = (TextWebSocketFrame) frame;
-			return deserialize(textFrame.content());
+			return parseMessage(textFrame.content());
 		}
 		
 		if (frame instanceof BinaryWebSocketFrame) {
 			BinaryWebSocketFrame binFrame = (BinaryWebSocketFrame) frame;
-			return deserialize(binFrame.content());
+			return parseMessage(binFrame.content());
 		}
 		
 		log.warn("Message format error: " + frame); 
 		return null;
-	} 
+	}
+	
+	private Message parseMessage(ByteBuf buf){
+		int size = buf.readableBytes();
+		byte[] data = new byte[size];
+		buf.readBytes(data); 
+		Message msg = Message.parse(data); 
+		if(msg == null){
+			log.warn("Message format error: " + new String(data));
+		}
+		return msg;
+	}
 
 	private static String getWebSocketLocation(HttpMessage req, ChannelHandlerContext ctx) {
 		String location = req.headers().get(HttpHeaderNames.HOST) + WEBSOCKET_PATH;
@@ -187,19 +188,4 @@ public class MessageToHttpWsCodec extends MessageToMessageCodec<Object, Message>
 			return "ws://" + location;
 		}
 	}
-	
-	private static ByteBuf serialize(Message msg) throws IOException{ 
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		msg.writeTo(out); 
-		return Unpooled.wrappedBuffer(out.toByteArray());
-	}  
-	
-	private static Message deserialize(ByteBuf buf){ 
-		int size = buf.readableBytes();
-		byte[] data = new byte[size];
-		buf.readBytes(data); 
-		Message msg = new Message();
-		msg.readFrom(data); 
-		return msg;
-	} 
 }

@@ -1,4 +1,4 @@
-package io.zbus.mq.client;
+package io.zbus.mq.net;
  
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -6,15 +6,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import io.zbus.mq.api.Future;
-import io.zbus.mq.api.FutureListener; 
+import io.zbus.mq.Future;
+import io.zbus.mq.FutureListener; 
  
 
-class DefaultMqFuture<V, W> implements Future<V> {  
-	private Map<Object, Object> listenerMap = new ConcurrentHashMap<Object, Object>();
+class DefaultFuture<V, W> implements Future<V> {  
+	protected Map<Object, Object> listenerMap = new ConcurrentHashMap<Object, Object>();
 	protected final io.zbus.net.Future<W> support;
 	
-	public DefaultMqFuture(io.zbus.net.Future<W> support){
+	public DefaultFuture(io.zbus.net.Future<W> support){
 		this.support = support; 
 	} 
 	
@@ -63,7 +63,7 @@ class DefaultMqFuture<V, W> implements Future<V> {
 		io.zbus.net.FutureListener<W> supportListener = new io.zbus.net.FutureListener<W>() {   
 			@Override
 			public void operationComplete(io.zbus.net.Future<W> future) throws Exception {
-				listener.operationComplete(DefaultMqFuture.this);
+				listener.operationComplete(DefaultFuture.this);
 			}
 		};
 		listenerMap.put(listener, supportListener);

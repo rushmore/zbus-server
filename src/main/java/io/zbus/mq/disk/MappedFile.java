@@ -1,4 +1,4 @@
-package io.zbus.mq.diskq;
+package io.zbus.mq.disk;
 
 import java.io.Closeable;
 import java.io.File;
@@ -7,7 +7,6 @@ import java.io.RandomAccessFile;
 import java.lang.reflect.Method;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 
@@ -23,8 +22,7 @@ public class MappedFile implements Closeable {
 	
 	private RandomAccessFile diskFile; 
 	
-	protected void load(File file, int fileSize) throws IOException { 
-		FileLock lock = null; 
+	protected void load(File file, int fileSize) throws IOException {  
 		try { 
 			boolean fileExits = file.exists();
 			if(!fileExits){
@@ -53,8 +51,6 @@ public class MappedFile implements Closeable {
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 			throw new IllegalArgumentException(e);
-		} finally {
-			if(lock != null) lock.release();
 		} 
 	}  
 	

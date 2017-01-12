@@ -6,15 +6,15 @@ import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
-import io.zbus.mq.api.Message;
+import io.zbus.mq.Message;
 import io.zbus.net.CodecInitializer;
 import io.zbus.net.Identifier;
-import io.zbus.net.IoDriver;
+import io.zbus.net.EventDriver;
 import io.zbus.net.tcp.TcpClient;
 
 public class MessageClient extends TcpClient<Message, Message>{
 	
-	public MessageClient(String address, final IoDriver driver){
+	public MessageClient(String address, final EventDriver driver){
 		super(address, driver); 
 		
 		codec(new CodecInitializer() {

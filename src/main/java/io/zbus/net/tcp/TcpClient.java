@@ -19,7 +19,7 @@ import io.zbus.net.CodecInitializer;
 import io.zbus.net.Future;
 import io.zbus.net.FutureListener;
 import io.zbus.net.Identifier;
-import io.zbus.net.IoDriver;
+import io.zbus.net.EventDriver;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
 import io.zbus.util.logger.LoggerFactory;
@@ -47,7 +47,7 @@ public class TcpClient<REQ, RES> extends AttributeMap implements Client<REQ, RES
 	private Identifier<REQ, RES> identifier; 
 	private ConcurrentMap<String, DefaultPromise<RES>> waitingPromises = new ConcurrentHashMap<String, DefaultPromise<RES>>();
 	
-	public TcpClient(String address, IoDriver driver){  
+	public TcpClient(String address, EventDriver driver){  
 		eventGroup = driver.getGroup();
 		sslCtx = driver.getSslContext();
 		

@@ -4,9 +4,9 @@
 	<modelVersion>4.0.0</modelVersion>
 	<packaging>jar</packaging>
 	<groupId>io.zbus</groupId>
-	<artifactId>zbus</artifactId>
+	<artifactId>zbus-io</artifactId>
 	<version>0.8.0</version>
-	<name>zbus</name>
+	<name>zbus-io</name>
 	<description>Lightweight MQ, RPC</description>
 	<url>https://zbus.io</url>
 

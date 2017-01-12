@@ -12,8 +12,8 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.zbus.util.logger.Logger;
 import io.zbus.util.logger.LoggerFactory;
 
-public class IoDriver implements Closeable {
-	private static final Logger log = LoggerFactory.getLogger(IoDriver.class);
+public class EventDriver implements Closeable {
+	private static final Logger log = LoggerFactory.getLogger(EventDriver.class);
 
 	private EventLoopGroup bossGroup;  
 	private EventLoopGroup workerGroup;  
@@ -24,7 +24,7 @@ public class IoDriver implements Closeable {
 	private int idleTimeInSeconds = 300; //5 minites
 	private int packageSizeLimit = 1024*1024*32; //maximum of 32M
 
-	public IoDriver() {
+	public EventDriver() {
 		try {
 			bossGroup = new NioEventLoopGroup();
 			workerGroup = new NioEventLoopGroup();
@@ -33,14 +33,14 @@ public class IoDriver implements Closeable {
 		}
 	}
 	
-	public IoDriver(EventLoopGroup group){
+	public EventDriver(EventLoopGroup group){
 		this.bossGroup = group;
 		this.workerGroup = group;
 		this.ownBossGroup = false;
 		this.ownWorkerGroup = false;
 	}
 
-	public IoDriver(EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
+	public EventDriver(EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
 		this.bossGroup = bossGroup;
 		this.workerGroup = workerGroup;
 		this.ownBossGroup = false;

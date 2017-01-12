@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.zbus.mq.api.Message;
+import io.zbus.mq.Message;
 import io.zbus.net.IoAdaptor;
 import io.zbus.net.Session;
 import io.zbus.util.logger.Logger;
@@ -14,8 +14,7 @@ public class MessageAdaptor implements IoAdaptor{
 	private static final Logger log = LoggerFactory.getLogger(MessageAdaptor.class);
 	 
 	protected MessageHandler filterHandler;   
-	protected Map<String, MessageHandler> cmdHandlerMap = new ConcurrentHashMap<String, MessageHandler>();
-	protected Map<String, MessageProcessor> urlHandlerMap = new ConcurrentHashMap<String, MessageProcessor>();
+	protected Map<String, MessageHandler> cmdHandlerMap = new ConcurrentHashMap<String, MessageHandler>(); 
 	protected Map<String, Session> sessionTable;
 	
 	private static final String CMD_HEARTBEAT = "heartbeat";
@@ -35,34 +34,37 @@ public class MessageAdaptor implements IoAdaptor{
 	 
 	public void cmd(String command, MessageHandler handler){
     	this.cmdHandlerMap.put(command, handler);
-    }
-	
-	public void url(String path, final MessageProcessor processor){
-		if(!path.startsWith("/")){
-			path = "/"+path;
-		}
-		
-		this.urlHandlerMap.put(path, processor);
-		String cmd = path;
-		if(cmd.startsWith("/")){
-			cmd = cmd.substring(1);
-		}
-		cmd(cmd, new MessageHandler() { 
-			@Override
-			public void handle(Message msg, Session sess) throws IOException {
-				final String msgId = msg.getId();
-				Message res = processor.process(msg);
-				if(res != null){
-					res.setId(msgId);
-					sess.write(res);
-				}
-			}
-		});
-	}
+    } 
 	 
     public void registerFilterHandler(MessageHandler filterHandler) {
 		this.filterHandler = filterHandler;
 	}  
+    
+    private void handleUrlMessage(Message msg){ 
+    	if(msg.getCmd() != null){
+    		return;
+    	} 
+    	String url = msg.getUrl(); 
+    	if(url == null || "/".equals(url)){
+    		msg.setCmd("");
+    		return;
+    	} 
+    	int idx = url.indexOf('?');
+    	String cmd = "";
+    	if(idx >= 0){
+    		cmd = url.substring(1, idx); 
+    		if(url.charAt(idx-1) == '/'){
+    			cmd = url.substring(1, idx-1);
+    		} else {
+    			cmd = url.substring(1, idx);
+    		}
+    	} else {
+    		cmd = url.substring(1);
+    	}  
+    	
+    	msg.setCmd(cmd);
+    	msg.urlToHead(); 
+	}
     
     @Override
     public void sessionData(Object obj, Session sess) throws IOException {  
@@ -73,6 +75,8 @@ public class MessageAdaptor implements IoAdaptor{
     		this.filterHandler.handle(msg, sess);
     	}
     	
+    	handleUrlMessage(msg); 
+    	
     	String cmd = msg.getCmd();
     	if(cmd != null){ //cmd
     		MessageHandler handler = cmdHandlerMap.get(cmd);
@@ -81,43 +85,11 @@ public class MessageAdaptor implements IoAdaptor{
         		return;
         	}
     	}
-    	
-    	String url = msg.getUrl();
-    	if(url == null){ 
-    		Message res = new Message();
-    		res.setId(msgId); 
-        	res.setStatus(400);
-        	res.setBody("Bad Format(400): Missing Command and RequestPath"); 
-        	sess.write(res);
-    		return;
-    	}
-    	
-    	MessageProcessor urlHandler = urlHandlerMap.get(url);
-    	if(urlHandler != null){
-    		Message res = null; 
-    		try{
-    			res = urlHandler.process(msg); 
-	    		if(res != null){
-	    			res.setId(msgId);
-	    			if(res.getStatus() == null){
-	    				res.setStatus(200);// default to 200
-	    			}
-	    			sess.write(res);
-	    		}
-    		} catch (Exception e) { 
-    			res = new Message();
-    			res.setStatus(500);
-    			res.setBody("Internal Error(500): " + e);
-    			sess.write(res);
-			}
-    
-    		return;
-    	} 
-    	
+    	 
     	Message res = new Message();
     	res.setId(msgId); 
     	res.setStatus(404);
-    	String text = String.format("Not Found(404): %s", url);
+    	String text = String.format("Not Found(404): %s", cmd);
     	res.setBody(text); 
     	sess.write(res); 
     } 
@@ -163,13 +135,5 @@ public class MessageAdaptor implements IoAdaptor{
 	public void sessionUnregistered(Session sess) throws IOException {
 		
 	} 
-	
-	public static interface MessageHandler {
-		void handle(Message msg, Session session) throws IOException;   
-	}
-	
-	public static interface MessageProcessor {
-		Message process(Message request);
-	}
 }
 

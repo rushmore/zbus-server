@@ -7,7 +7,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
-import io.zbus.mq.api.Message;
+import io.zbus.mq.Message;
 import io.zbus.net.Client.DataHandler;
 import io.zbus.net.tcp.TcpClient;
  
@@ -15,7 +15,7 @@ public class ClientTest {
 
 	@SuppressWarnings("resource")
 	public static void main(String[] args) throws Exception {
-		IoDriver ioDriver = new IoDriver();
+		EventDriver ioDriver = new EventDriver();
 		
 		TcpClient<Message, Message> client = new TcpClient<Message, Message>("localhost:15555", ioDriver);
 		client.codec(new CodecInitializer() { 
@@ -29,7 +29,7 @@ public class ClientTest {
 		
 		Message message = new Message();
 		message.setCmd("produce");
-		message.setTopic("Hong");
+		message.setMq("Hong");
 		
 		
 		client.onData(new DataHandler<Message>() { 

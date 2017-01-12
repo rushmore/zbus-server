@@ -1,4 +1,4 @@
-package io.zbus.rpc.api;
+package io.zbus.rpc;
 
 public class Response {
 
