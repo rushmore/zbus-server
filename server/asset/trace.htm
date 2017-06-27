@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+<title>Trace - zbus</title>
+<script type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/js/jquery-ui.js"></script>
+<script type="text/javascript" src="/js/bootstrap.js"></script>
+<script type="text/javascript" src="/js/base.js"></script>
+<script type="text/javascript" src="/js/zbus.js"></script>
+<link rel="stylesheet" href="/css/bootstrap.css" type="text/css">
+<link rel="stylesheet" href="/css/base.css" type="text/css">
+
+</head>
+<body> 
+<div class="header">
+
+<nav class="navbar navbar-inverse navbar-static-top">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>  
+            <a class="navbar-brand" href="/"> 
+            	<img src="/img/logo.svg"></img> 
+            	<span>ZBUS = MQ + RPC</span>
+            </a> 
+        </div>
+        <div class="collapse navbar-collapse" id="navbar">
+             <ul class="nav navbar-nav">
+            	<li><a class="link" href="#">Trace</a></li>   
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+                <li><a target="_blank" href="http://zbus.io/">Documentation</a></li>
+                <li><a target="_blank" href="http://git.oschina.net/rushmore/zbus">Gitosc</a></li>
+                <li><a target="_blank" href="http://github.com/rushmore/zbus">Github</a></li>
+                <li class="hidden-xs"><p class="navbar-text"><span class="label label-success" id="version"></span></p></li>
+            </ul> 
+        </div>
+    </div>
+</nav>
+</div>
+ 
+<div class="nodes container-fluid">    
+  
+<div class="row">
+    <div class="col-md-12">
+        <span class="label label-primary">Servers</span>
+    </div> 
+    <div class="col-md-12">
+        <table id="server-list"  class="table table-condensed table-bordered">
+            <tbody>
+            <tr> 
+                <th style="width: 16%">Server Address 
+                <div class="filter-box">
+                	<input id="filter-all" type='checkbox' checked="checked">
+                </div>
+                </th> 
+	            <th style="width: 8%">Version</th> 
+                <th>Topics</th>
+            </tr>  
+        	</tbody>
+        </table>
+    </div> 
+</div>   
+
+<div class="row">
+    <div class="col-md-12">
+        <span class="label label-primary">Live Log</span>
+    </div> 
+    <div class="col-md-12">
+    	<div id="trace-log">
+    	</div> 
+    </div> 
+</div>   
+ 
+</div>
+ 
+ 
+<script type="text/javascript"> 
+
+
+$(document).ready(function(){  
+	
+var broker = null;
+var filterServerList = null;
+
+function calcFilter(){ 
+	filterServerList = [];
+    $("#server-list input.server").each(function(data){
+    	var checked = $(this).is(":checked");
+    	if(checked){
+    		filterServerList.push($(this).val());
+    	} 
+    });   
+}
+
+function updateTrackerInfo(){    
+	var serverInfoTable = broker.routeTable.serverTable;
+   	for(var serverAddress in serverInfoTable){ 
+   		var serverInfo = serverInfoTable[serverAddress];   
+   	}  
+} 
+
+
+$("#filter-all").change(function() {
+	var checked = $(this).is(":checked");
+	$("#server-list input.server").prop('checked', checked); 
+	
+	calcFilter();
+	updateTrackerInfo();
+});  
+
+$("#server-list").on("change", "input.server", function() {
+	var checked = $(this).is(":checked");
+    $(this).prop("checked", checked); 
+    
+    calcFilter();
+    updateTrackerInfo(); 
+});
+
+$("#server-list").on("click", "span.topic-list", function() {
+	$(this).toggleClass("topic-deactive"); 
+	
+	calcFilter();
+	updateTrackerInfo();
+});
+
+$("#server-list").on("click", "span.topic-badge" ,function() { 
+	$(this).toggleClass("badge-deactive"); 
+	if($(this).hasClass("badge-deactive")){
+		$(this).siblings().addClass("topic-deactive"); 
+	} else {
+		$(this).siblings().removeClass("topic-deactive");
+	}
+	calcFilter();
+	updateTrackerInfo(); 
+});
+ 
+   
+function onTracingMessage(msg){
+	if(msg.originUrl){ //return back to origin url
+		msg.url = msg.originUrl;
+		delete msg.originUrl;
+		delete msg.status;
+	}
+	var str = httpEncodeString(msg);  
+	if($("#trace-log pre").length > traceMessageCount){
+		$('#trace-log pre:last-child').remove();
+	}
+	$("#trace-log").prepend("<pre>"+ new Date().format("yyyy-MM-dd hh:mm:ss.S") + "\n" + str+"</pre>");
+}
+
+
+
+$.getJSON('/query',function(serverInfo){   
+	$("#version").text(serverInfo.serverVersion); 
+	var trackerAddress = serverInfo.serverAddress;
+	broker = new Broker();   
+	broker.onServerUpdated = function(serverInfo){
+		showServerTable(broker.routeTable.serverTable, filterServerList, trackerAddress); 
+	};
+	broker.addTracker(trackerAddress); 
+	 
+	for(var i in serverInfo.trackerList){
+		var serverAddress = serverInfo.trackerList[i]; 
+		var serverFullAddr = httpFullAddress(serverAddress);
+		$("#track-list").append(
+			"<a class='link' target='_blank' href='" +serverFullAddr + "'>" + serverAddress.address + "</a>"
+		);
+	}  
+});     
+
+
+});
+
+
+</script> 
+
+</body>
+
+</html>

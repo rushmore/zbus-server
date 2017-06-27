@@ -1,0 +1,154 @@
+.navbar-brand {
+  padding-top: 8px;	
+}
+.navbar-brand > img {
+  width: 36px;
+  height: 36px;  
+  display: inline;
+} 
+ 
+.topic {
+	margin: 3px;
+	cursor: pointer;
+} 
+
+.filter-box{
+	float: right; 
+	clear: right;  
+	padding-top: 1px;
+}
+textarea.log { 
+	border-style: none; 
+    border-color: Transparent; 
+    overflow: auto; 
+    resize: none;
+}
+
+.label-as-badge{
+	border-radius: 3em;
+	padding-left: 6px;
+	padding-right: 6px;
+} 
+.topic-deactive{
+	color: black;
+	background-color: white;
+}
+
+.badge-deactive{
+	color: black;
+	background-color: #777;
+}
+.modal-content{
+	width: 1000px;
+	height: 600px;
+}
+.close-box{
+	float: right; 
+	clear: right;   
+}
+
+.action {
+	margin: 6px;
+	padding: 6px;
+	cursor: pointer;
+} 
+.action-list {
+	margin: 8px; 
+} 
+.modal-header{
+	padding: 10px;
+}
+.caption{
+	margin-left: 6px;
+	display: inline;
+}
+.caption span{
+	font-weight: bolder;
+}
+
+.consumer-group-list { 
+    overflow-y: auto;  
+}
+
+
+.table-outter{
+	border: 2px solid #ddd; 
+	margin: 0px;   
+	width: 100%;
+    max-width: 100%;
+} 
+.table-outter>tbody>tr{
+	border-bottom: 2px solid #ddd; 
+}
+
+.table-outter>tbody>tr>td{ 
+	border-right: 2px solid #ddd;
+}
+
+
+.table-nested{
+	margin: 0px;   
+	width: 100%;
+    max-width: 100%;
+}
+
+.table-nested>tbody>tr{
+	border-bottom: 1px solid #ddd; 
+	line-height: 24px;
+}
+.table-nested>tbody>tr:last-child{
+	border: none;
+}
+.table-nested>tbody>tr>td{ 
+	border-right: 1px solid #ddd;
+} 
+.table-nested>tbody>tr>td:last-child{ 
+	border: none;
+}
+
+.table-nested>tbody>tr>td, 
+.table-nested>tfoot>tr>td, 
+.table-nested>tfoot>tr>th, 
+.table-nested>thead>tr>td, 
+.table-nested>thead>tr>th {
+    padding: 0px;
+    vertical-align: middle;
+}
+
+.tgroup tr>td:nth-child(1) {	
+	width: 15%; 
+}
+.tgroup tr>td:nth-child(2) {	
+	width: 85%;
+}
+
+
+.sgroup tr>td:nth-child(1) {	
+	width: 12%; 
+}
+.sgroup tr>td:nth-child(2) {	
+	width: 8%;
+}
+.sgroup tr>td:nth-child(3) {	
+	width: 80%;
+}
+
+
+.cgroup tr>td:nth-child(1) {	
+	width: 30%; 
+}
+.cgroup tr>td:nth-child(2) {	
+	width: 20%;
+}
+.cgroup tr>td:nth-child(3) {	
+	width: 20%;
+}
+.cgroup tr>td:nth-child(4) {	
+	width: 20%;
+}
+.header-ctrl{
+	font-weight: bold;
+	background-color: #f5f5f5;
+	line-height: 30px;
+	border-bottom: none;
+} 

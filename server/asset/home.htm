@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+<title>Home - zbus</title>
+<script type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/js/jquery-ui.js"></script>
+<script type="text/javascript" src="/js/bootstrap.js"></script>
+<script type="text/javascript" src="/js/base.js"></script>
+<script type="text/javascript" src="/js/zbus.js"></script>
+<link rel="stylesheet" href="/css/bootstrap.css" type="text/css">
+<link rel="stylesheet" href="/css/base.css" type="text/css">
+
+</head>
+<body> 
+<div class="header">
+
+<nav class="navbar navbar-inverse navbar-static-top">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>  
+            <a class="navbar-brand" href="/"> 
+            	<img src="/img/logo.svg"></img> 
+            	<span>ZBUS = MQ + RPC</span>
+            </a> 
+        </div>
+        <div class="collapse navbar-collapse" id="navbar">
+             <ul class="nav navbar-nav">  
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+                <li><a target="_blank" href="http://zbus.io/">Documentation</a></li>
+                <li><a target="_blank" href="http://git.oschina.net/rushmore/zbus">Gitosc</a></li>
+                <li><a target="_blank" href="http://github.com/rushmore/zbus">Github</a></li>
+                <li class="hidden-xs"><p class="navbar-text"><span class="label label-success" id="version"></span></p></li>
+            </ul> 
+        </div>
+    </div>
+</nav>
+</div>
+ 
+<div class="nodes container-fluid">   
+  
+  
+<div class="row">
+    <div class="col-md-12">
+        <span class="label label-primary">Tracked Servers</span>
+    </div> 
+    <div class="col-md-12">
+        <table id="server-list"  class="table table-condensed table-bordered">
+            <tbody>
+            <tr> 
+                <th style="width: 16%">Server Address 
+                <div class="filter-box">
+                	<input id="filter-server" type='checkbox' checked="checked">
+                </div>
+                </th> 
+                <th style="width: 8%">Version</th> 
+	            <th style="width: 8%">InfoVersion</th> 
+                <th>Topics</th>
+            </tr>  
+        	</tbody>
+        </table>
+    </div> 
+</div>   
+
+<div class="row">
+    <div class="col-md-12">
+        <span class="label label-primary">Topic Table</span>
+    </div>
+</div> 
+ 
+
+<div class="row">
+    <div class="col-md-12 table-responsive">
+        <table id="topic-list" class="table-outter tgroup"> 
+			<tbody>  
+				<tr class="header-ctrl">
+					<td>Topic</td>
+					<td>
+						<table class="table-nested sgroup">
+							<tr>
+								<td>In Server</td>
+								<td>Msg Depth</td> 
+								<td>
+									<table class="table-nested cgroup">
+									<tr>
+										<td>ConsumeGroup</td>
+										<td>Msg Unconsumed</td> 
+										<td>Consumer (Waiting)</td> 
+										<td>Msg Filter</td>  
+									</tr> 
+								</table>  
+								</td> 
+							</tr> 
+						</table> 
+					</td>
+				</tr>
+				<!-- body --> 
+				
+			</tbody>
+		</table>
+    </div>
+</div>
+
+ 
+
+</div>
+ 
+ 
+<script type="text/javascript"> 
+
+
+$(document).ready(function(){  
+	
+var broker = null;
+var filterServerList = null;
+
+function updateTrackerInfo(){
+	filterServerList = [];
+    $("#server-list input.server").each(function(data){
+    	var checked = $(this).is(":checked");
+    	if(checked){
+    		filterServerList.push($(this).val());
+    	} 
+    });  
+    
+    if(broker){  
+    	showTopicTable(broker.routeTable.topicTable, filterServerList);
+    } 
+} 
+
+
+$("#filter-server").change(function() {
+	var checked = $(this).is(":checked");
+	$("#server-list input.server").prop("checked", checked);   
+	
+	updateTrackerInfo();
+});  
+
+$("#server-list").on("change", "input.server", function() {
+	var checked = $(this).is(":checked");
+	$(this).prop("checked", checked);  
+   
+    updateTrackerInfo(); 
+}); 
+  
+
+
+$.getJSON('/tracker',function(trackerInfo){   
+	$("#version").text(trackerInfo.serverVersion); 
+	var trackerAddress = trackerInfo.serverAddress;
+	broker = new Broker();   
+	broker.onServerUpdated = function(){
+		showServerTable(broker.routeTable.serverTable, filterServerList, trackerAddress);
+		showTopicTable(broker.routeTable.topicTable, filterServerList); 
+	}; 
+	
+	broker.addTracker(trackerAddress);  
+});    
+
+
+});
+
+
+</script> 
+
+</body>
+
+</html>
