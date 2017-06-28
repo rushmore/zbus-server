@@ -16,3 +16,6 @@
 [submodule "clients/zbus-cpp"]
 	path = clients/zbus-cpp
 	url = https://github.com/rushmore/zbus-cpp
+[submodule "zbus-cpp"]
+	path = zbus-cpp
+	url = https://github.com/rushmore/zbus-cpp
