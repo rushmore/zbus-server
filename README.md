@@ -13,7 +13,7 @@ Star this project if you like zbus:)
 - Simple HTTP-alike control protocol(Browser direct control), easy to extend clients.
 - TCP/HTTP/WebSocket, all in one single port, including monitor, capable of DMZ deployment.
 - Multiple platforms support, JAVA/.NET/JavaScript/Python/C_C++/GO/PHP... 
-- Extremely light-weighted(<400K + a very few dependencies like netty.jar)
+- Extremely light-weighted, single executable file without any dependency(~1M zipped).
 
  
 ## 2. Architecture
@@ -28,10 +28,10 @@ Producer = Broker = Consumer
 
 
  
-###2.1 Topic
+### 2.1 Topic
 
  
-###2.2 ConsumeGroup
+### 2.2 ConsumeGroup
 
 ConsumeGroup plays an important role of MQ in zbus. It is mainly designed to support different messaging models in applications.
 
@@ -42,7 +42,7 @@ Regarding to a topic, no matter how many consume-groups exists, there is only on
 - Multicast -- Multiple groups of Consumers, in each group, consumers share one same consume-group.
 
  
-###2.3 MqClient
+### 2.3 MqClient
 
 MqClient is a TCP based client to control topic and consume-group in MqServer:
 
@@ -55,11 +55,11 @@ MqClient is a TCP based client to control topic and consume-group in MqServer:
 - empty topic and consume-group
 
  
-###2.4 MqServer
+### 2.4 MqServer
 
 
  
-###2.5 Broker
+### 2.5 Broker
 
 Producer-Broker-Consumer PBC model is the high level view of a Messaging Queue system.
 Broker refers to a MQ server, however, from the client point of view, Broker in client is an abstraction 
@@ -105,7 +105,7 @@ with special selection algorithm.
  
 
 
-##3. Protocol
+## 3. Protocol
 
 *Common headers*
 
@@ -195,7 +195,7 @@ Exampels:
 
   
 
-##4. Monitoring
+## 4. Monitoring
 
 ![Monitor](https://git.oschina.net/uploads/images/2017/0517/184806_39bb1fc9_7458.png "Monitor")
  
