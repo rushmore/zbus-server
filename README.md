@@ -1,11 +1,11 @@
-#ZBUS = MQ + RPC  
+# ZBUS = MQ + RPC  
 
 Zbus strives to make Message Queue and Remote Procedure Call fast, light-weighted and easy to build your own elastic and micro-service oriented bus for many different platforms. Simply put, ZBUS = MQ + RPC.
 
 QQ Discussion: **467741880**  
 Star this project if you like zbus:)
 
-##1. Features
+## 1. Features
 
 - Fast Message Queue in persisted mode, capable of Unicast, Multicast and Broadcast messaging models.
 - Language agnostic RPC support out of box.
@@ -16,7 +16,7 @@ Star this project if you like zbus:)
 - Extremely light-weighted(<400K + a very few dependencies like netty.jar)
 
  
-##2. Architecture
+## 2. Architecture
 
 
 ![Archit](https://git.oschina.net/uploads/images/2017/0517/183402_0efce626_7458.png "Archit")
