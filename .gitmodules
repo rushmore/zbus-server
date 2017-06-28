@@ -1,0 +1,3 @@
+[submodule "clients/zbus-php"]
+	path = clients/zbus-php
+	url = https://github.com/rushmore/zbus-php
