@@ -1,201 +1,136 @@
+                /\\\       
+                \/\\\        
+                 \/\\\    
+     /\\\\\\\\\\\ \/\\\         /\\\    /\\\  /\\\\\\\\\\     
+     \///////\\\/  \/\\\\\\\\\  \/\\\   \/\\\ \/\\\//////     
+           /\\\/    \/\\\////\\\ \/\\\   \/\\\ \/\\\\\\\\\\    
+          /\\\/      \/\\\  \/\\\ \/\\\   \/\\\ \////////\\\  
+         /\\\\\\\\\\\ \/\\\\\\\\\  \//\\\\\\\\\   /\\\\\\\\\\  
+         \///////////  \/////////    \/////////   \//////////       QQ Group: 467741880
+
 # ZBUS = MQ + RPC  
+zbus strives to make Message Queue and Remote Procedure Call fast, light-weighted and easy to build your own service-oriented architecture for many different platforms. Simply put, zbus = mq + rpc.
 
-Zbus strives to make Message Queue and Remote Procedure Call fast, light-weighted and easy to build your own elastic and micro-service oriented bus for many different platforms. Simply put, ZBUS = MQ + RPC.
+zbus carefully designed on its protocol and components to embrace KISS(Keep It Simple and Stupid) principle, but in all it delivers power and elasticity. 
 
-QQ Discussion: **467741880**  
-Star this project if you like zbus:)
+## Features
+- Fast MQ on disk, capable of unicast, multicast and broadcast messaging models
+- Easy RPC support out of box, language agnostic
+- Officially support Java/.NET/Javascript/C_C++/Python/Go/PHP clients
+- Extremely light-weighted, (~1M zipped executable, no dependency)
+- High Availability inside, able to join or leave any distributed components
+- TCP/HTTP/WebSocket, Monitor, all in one port, support DMZ deployment
+- Based on simple protocol: HTTP-header extension, and browser access friendly
 
-## 1. Features
 
-- Fast Message Queue in persisted mode, capable of Unicast, Multicast and Broadcast messaging models.
-- Language agnostic RPC support out of box.
-- High Availability inside, easy to add more servers.
-- Simple HTTP-alike control protocol(Browser direct control), easy to extend clients.
-- TCP/HTTP/WebSocket, all in one single port, including monitor, capable of DMZ deployment.
-- Multiple platforms support, JAVA/.NET/JavaScript/Python/C_C++/GO/PHP... 
-- Extremely light-weighted, single executable file without any dependency(~1M zipped).
+## Performance
 
- 
-## 2. Architecture
+	Single Mac i7 box with SSD, with apache ab -k -c 32 -n 4000000 URL
 
+	Produce:  ~70,000/s
+	Consume:  ~60,000/s
+	RPC: ~20,000/s (java service)
+
+## Getting started
+### Installation
+- Build from source
+
+Download the source, in server directory
+
+	go build  
+
+No dependency just Go!
+
+- Download executable
+
+Directly download from the prebuilt binary.
+
+
+
+Incase you may interest in the client projects, go to zbus source root directory
+
+	git submodule update --init --recursive  
+
+On your favorite OS, run the built zbus binary, access the monitor address
+
+[http://localhost:15555](http://localhost:15555) 
+
+You can change the default configuration, in console, type 
+
+	zbus -h             (change the binary name to 'zbus' if by default is 'server')
+
+all self-explained, with configurable items listed such as port to listen, directory to store MQ and log etc.
+
+![Monitor](https://git.oschina.net/uploads/images/2017/0630/162232_543dc692_7458.png "Monitor")
+
+
+### MQ and RPC at a glance
+
+In the monitor page, as you can see, there are two sections
+1. Tracked Servers
+
+	List all the MqServer joined.
+	
+	zbus instance by default plays the role of both Tracker and MqServer, and if tracker mode enabled, the zbus instance is able to accept other zbus instances to join as tracked server. And the tracked items such topics are aggregated for viewing.
+
+	To join zbus tracker(s), just start zbus with --tracker={address_list}
+
+2. TopicTable
+
+	List all Topic avaiable for the tracked MqServers
+	
+	Including important fields as Topic name, message depth in disk, consume-groups, consumer online, message consume filter.
+
+	For more detailed explanation of these glossaries please refer to components section.
+
+In zbus, RPC is implemented via MQ, a MQ can be a message container for the RPC service, and internally it contains a mask to indicate the MQ's purpose of RPC.
+
+The monitor page keeps evolving, more and more items will be added in.
+
+## Components
 
 ![Archit](https://git.oschina.net/uploads/images/2017/0517/183402_0efce626_7458.png "Archit")
 
-Producer = Broker = Consumer
+The above figure shows the 3 major distributed components--**broker**, **producer** and **consumer** 
+
+**Broker** 
+
+*Single mode*, Broker is the zbus instance(MqServer), stores messages produced, delivers messages to consumers.
+
+*HA mode*, Broker is an abstracted server(Trackers + MqServers), capable of failover and smart algorithms on selection of MqServer, 
+but still just work like a single MqServer.
 
 
-![MQ](https://git.oschina.net/uploads/images/2017/0517/183644_a160de3b_7458.png "MQ")
+**Producer**
+
+Producer publish message to Broker, capable of customerize the selection algorithm based on the application's will.
+
+**Consumer**
+
+Consumer takes message from Broker, capable of relocating consuming position based on message offset.
+
+**Topic**
+
+Topic is a message queue identity, message with same topic fall into the same message store queue. 
+
+**ConsumeGroup**
+
+ConsumeGroup controls the consumer behavior, it stores latest consumed position of the topic, and filter out message if ConsumeGroup's filter is set.
+ConsumeGroup is super light-weighted in zbus, it is just like a pointer to the message queue, with carefully craft on ConsumeGroup,
+applications can form unicast, multicast, and broadcast messaging models.
+
+## Protocol
 
 
- 
-### 2.1 Topic
+## Internal Design
 
- 
-### 2.2 ConsumeGroup
+Broker Design
 
-ConsumeGroup plays an important role of MQ in zbus. It is mainly designed to support different messaging models in applications.
+DiskQueue Design
 
-Regarding to a topic, no matter how many consume-groups exists, there is only one copy of messages queue storing messages received from Producer(s), Consumer(s) can read the message out from topic via a single consume-group or multiple ones, Consumers and consume-groups combination helps to build different messaging models, typically including Unicast, Broadcast, and Multicast.
-
-- Unicast -- Consumers share only one consume-group, message in topic is designed to be consumed by only one consumer
-- Broadcast -- Consumers use privately owned consume-group, message in topic is then consumed by every consumer
-- Multicast -- Multiple groups of Consumers, in each group, consumers share one same consume-group.
-
- 
-### 2.3 MqClient
-
-MqClient is a TCP based client to control topic and consume-group in MqServer:
-
-- produce message to MqServer as Producer role
-- consume message from MqServer as Consumer role
-
-- declare create/update topic and consume-group, capable of change consuming policy
-- query topic and consume-group
-- remove topic and consume-group 
-- empty topic and consume-group
-
- 
-### 2.4 MqServer
-
-
- 
-### 2.5 Broker
-
-Producer-Broker-Consumer PBC model is the high level view of a Messaging Queue system.
-Broker refers to a MQ server, however, from the client point of view, Broker in client is an abstraction 
-of connection(pooling) to MqServer(s).
-
-Broker manages a set of MqClientPools each of which connects to a MqServer in group, and all ,
-creating the RouteTable of topics. 
-
-Broker also detects the connectivity of remote MqServers, removes the dead ones.
-
-Broker can work in dynamic or static way
-- dynamic, configure with tracker address(or list of trackers)
-- static, just manual call addServer.
-
-Broker defers the MqServer selection algorithm to Producer and Consumer, both of which could be configured
-with special selection algorithm.
-
- 
-**BrokerRouteTable**
-
-	serverTable: serverAddressKey => ServerInfo
-	topicTable: topicName => [TopicInfo List]
-	votesTable: serverAddressKey => [Voted TrackerServer List]
-
-	+ updateVotes(trackerInfo)
-		trackerInfo = {
-			serverAddress: {address: xx, sslEnabled: xxx}
-			trackedServerList: [{address: xx1, sslEnabled: xxx},{address: xx2, sslEnabled: xxx}]
-		}
-		
-		1. for each trackedServer in trackedServerlist:
-			  add(no changes if exists) vote with trackerAddress
-		2. for each server in votesTable: //remove server not in this tracker's tracking list
-			  votedTrackerSet = votesTable[server] 
-			  if server not in trackerInfo.trackedServerList:
-					votedTrackerSet.remove(trackerAddress)
-		3. rebuild topicTable
-	
-		+ addServer(serverInfo)
-			rebuild topicTable after added of serverInfo
-		+ removeServer(serverAddress)
-			rebuild topicTable after removal of serverInfo
- 
-
-
-## 3. Protocol
-
-*Common headers*
-
-	cmd: <cmd>
-	topic: <topic> 
-	token: [token]
-
-**produce**
-	
-	cmd: produce
-	tag: [tag]    //tag of message, used for consume-group filter
-	body: [body]
-
-**consume**
-	
-	cmd: consume
-	consume_group: [group_name]
-	consume_window: [window_size] //default to null, means 1
-
-**declare**
-
-	cmd: declare
-	consume_group: [consume-group name] //short name=> group
-	
-	topic_mask:    [topic mask value]    
-	group_mask:    [consume-group mask value]
-	group_filter:  [message filter for group] //filter on message's tag
-	
-	//locate the group's start point
-	group_start_copy:   [consume-group name] //copy from
-	group_start_time:   [consume-group start time]
-	group_start_offset: [consume-group start offset]
-	group_start_msgid:  [consume-group start offset's msgid] //validate for offset value
-
-
-**query**
-
-	cmd: query
-	topic: [topic] //if not set, result is the server info
-	consume_group: [consume-group]
-
-**remove**
-	
-	cmd: remove
-	consume_group: [consume-group] //if not set, remove whole topic including groups belonging to the topic
-
-**empty**
-	
-	cmd: empty
-	consume_group: [consume-group] //if not set, empty whole topic including groups belonging to the topic
-
-
-To be browser friendly, URL request and parameters are parsed if header key-value not populated, however,
-header key-value always take precedence over URL parse result.
-
-	URL Pattern: /<cmd>/[topic]/[group]/[?k=v list]
-	
-	/produce/topic
-	/consume/topic/[group]
-	/declare/topic/[group]
-	/remove/topic/[group] 
-	/empty/topic/[group]
-	
-	/query/topic/[group] 
-	
-	/track_sub
-	/track_pub
-	
-	/rpc/topic/method/arg1/arg2.../[?module=xxx&&appid=xxx&&token=xxx]  *exception: rpc not follow 
-
-
-Exampels:
-
-	http://localhost:15555/consume/MyTopic  consume one message from topic=MyTopic, consume-group default to same name as topic name
-	http://localhost:15555/consume/MyTopic/group1   consume one message from group1 in MyTopic
-	http://localhost:15555/declare/MyTopic   declare a topic named MyTopic, consume-group with same MyTopic should be created as well.
-	http://localhost:15555/declare/MyTopic/group1   declare a topic named MyTopic, and consume-group named group1.
-	http://localhost:15555/declare/MyTopic/group1?group_filter=abc&&group_mask=16   same as above, but with consume-group filter set to abc, consume-group mask set to 16
-	http://localhost:15555/query/MyTopic  query topic info named MyTopic
-	http://localhost:15555/query/MyTopic/group1  query consume-group info named group1 in MyTopic
-	http://localhost:15555/remove/MyTopic  remove topic named MyTopic, which will remove all the consume-groups included
-	http://localhost:15555/remove/MyTopic/group1  remove consume-group named group1 in MyTopic
-	
-	http://localhost:15555/rpc/myrpc/plus/1/2  invoke remote method plus with parameter 1 and 2, remote service registered as myrpc topic
+RPC Design
 
 
 
-  
 
-## 4. Monitoring
-
-![Monitor](https://git.oschina.net/uploads/images/2017/0517/184806_39bb1fc9_7458.png "Monitor")
  

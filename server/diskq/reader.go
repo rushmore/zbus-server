@@ -191,7 +191,7 @@ func (r *QueueReader) writeOffset() {
 func (r *QueueReader) readMsgNo() error {
 	if r.block.IsBlockEnd(int(r.offset)) { //just at the end of block
 		if r.index.IsOverflow(r.blockNo + 1) { //no more block available
-			r.msgNo = r.index.MsgNo()
+			r.msgNo = r.index.MsgNo() - 1
 			return nil
 		}
 		r.blockNo++ //forward to next readable block

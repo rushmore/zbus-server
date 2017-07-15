@@ -18,22 +18,11 @@ func TestNewMessageQueue(t *testing.T) {
 
 func TestMessageQueue_Write(t *testing.T) {
 	msg := NewMessage()
-	msg.Header["cmd"] = "produce"
+	msg.SetCmd("produce")
 	msg.SetBodyString("hello world")
 	err := mq.Write(msg)
 	if err != nil {
 		t.Fail()
-	}
-}
-
-func TestMessageQueue_Read(t *testing.T) {
-
-	msg, _, err := mq.Read("hong")
-	if err != nil {
-		t.Fail()
-	}
-	if msg != nil {
-		fmt.Println(msg)
 	}
 }
 

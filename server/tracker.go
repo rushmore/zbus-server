@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"strings"
+	"path"
 	"time"
 
 	"./proto"
@@ -16,12 +16,12 @@ import (
 type Tracker struct {
 	infoVersion int64
 
-	upstreams        map[string]*MessageClient //Client mode: connect to upstream Trackers
-	healthyUpstreams map[string]*MessageClient //Client mode: connected upstream Trackers
-	downstreams      map[string]*MessageClient //Server mode: connected downstream MqServer
+	upstreams        SyncMap // map[string]*MessageClient, Client mode: connect to upstream Trackers
+	healthyUpstreams SyncMap // map[string]*MessageClient, Client mode: connected upstream Trackers
+	downstreams      SyncMap // map[string]*MessageClient, Server mode: connected downstream MqServer
 
-	subscribers map[string]*Session
-	serverTable map[string]*proto.ServerInfo
+	subscribers SyncMap // map[string]*Session
+	serverTable SyncMap // map[string]*proto.ServerInfo
 
 	reconnectInterval time.Duration
 	server            *Server
@@ -32,67 +32,77 @@ func NewTracker(server *Server) *Tracker {
 	t := &Tracker{}
 	t.infoVersion = CurrMillis()
 
-	t.upstreams = make(map[string]*MessageClient)
-	t.healthyUpstreams = make(map[string]*MessageClient)
-	t.downstreams = make(map[string]*MessageClient)
-	t.subscribers = make(map[string]*Session)
-	t.serverTable = make(map[string]*proto.ServerInfo)
+	t.upstreams.Map = make(map[string]interface{})
+	t.healthyUpstreams.Map = make(map[string]interface{})
+	t.downstreams.Map = make(map[string]interface{})
+	t.subscribers.Map = make(map[string]interface{})
+	t.serverTable.Map = make(map[string]interface{})
 	t.server = server
 	t.reconnectInterval = 3000 * time.Millisecond
 	return t
 }
 
 //JoinUpstreams connects to upstream trackers
-func (t *Tracker) JoinUpstreams(trackerList string) {
-	trackerList = strings.TrimSpace(trackerList)
-	if trackerList == "" {
-		return
-	}
-
-	addressList := SplitClean(trackerList, ";")
-	for _, trackerAddress := range addressList {
-		client := t.upstreams[trackerAddress]
+func (t *Tracker) JoinUpstreams(trackerList []*proto.ServerAddress) {
+	for _, trackerAddress := range trackerList {
+		key := trackerAddress.String()
+		client, _ := t.upstreams.Get(key).(*MqClient)
 		if client != nil {
 			continue //already exists
 		}
+
 		client = t.connectToServer(trackerAddress)
-		client.onConnected = func(c *MessageClient) {
-			log.Printf("Connected to Tracker(%s)\n", trackerAddress)
+
+		client.onConnected = func(c *MqClient) {
+			info, err := client.QueryServer()
+			if err != nil {
+				trackerAddress = info.ServerAddress
+			}
+			log.Printf("Connected to Tracker(%s)\n", trackerAddress.String())
+
 			event := &proto.ServerEvent{}
 			event.ServerInfo = t.server.serverInfo()
 			event.Live = true
 
 			t.updateToUpstream(c, event)
-			t.healthyUpstreams[trackerAddress] = c
+			t.healthyUpstreams.Set(trackerAddress.String(), c)
+			t.upstreams.Set(trackerAddress.String(), client)
 		}
 
-		client.onDisconnected = func(c *MessageClient) {
-			log.Printf("Disconnected from Tracker(%s)\n", trackerAddress)
-			delete(t.healthyUpstreams, trackerAddress)
+		client.onDisconnected = func(c *MqClient) {
+			log.Printf("Disconnected from Tracker(%s)\n", trackerAddress.String())
+			t.healthyUpstreams.Remove(trackerAddress.String())
 			time.Sleep(t.reconnectInterval)
 
 			notify := make(chan bool)
 			c.EnsureConnected(notify)
 			<-notify
 		}
-		t.upstreams[trackerAddress] = client
-
-		client.EnsureConnected(nil)
+		client.Start(nil)
 	}
 }
 
-//Publish server info to subscribers/upstream trackers
-func (t *Tracker) Publish() {
-	if len(t.healthyUpstreams) > 0 {
+//PubToAll publish ServerInfo to both Trackers and Subscribers
+func (t *Tracker) PubToAll() {
+	if t.healthyUpstreams.Size() > 0 {
 		event := &proto.ServerEvent{}
 		event.ServerInfo = t.server.serverInfo()
 		event.Live = true
-		for _, client := range t.healthyUpstreams {
+
+		t.healthyUpstreams.RLock()
+		for _, c := range t.healthyUpstreams.Map {
+			client, _ := c.(*MqClient)
 			t.updateToUpstream(client, event)
 		}
+		t.healthyUpstreams.RUnlock()
 	}
 
-	if len(t.subscribers) <= 0 {
+	t.PubToSubscribers()
+}
+
+//PubToSubscribers only publish ServerInfo to subscriber clients
+func (t *Tracker) PubToSubscribers() {
+	if t.subscribers.Size() <= 0 {
 		return
 	}
 
@@ -106,36 +116,45 @@ func (t *Tracker) Publish() {
 	msg.SetJsonBody(string(data))
 
 	var errSessions []*Session
-	for _, sess := range t.subscribers {
+	t.subscribers.RLock()
+	for _, s := range t.subscribers.Map {
+		sess, _ := s.(*Session)
 		err := sess.WriteMessage(msg)
 		if err != nil {
 			errSessions = append(errSessions, sess)
 		}
 	}
+	t.subscribers.RUnlock()
 	for _, sess := range errSessions {
-		delete(t.subscribers, sess.ID)
+		t.subscribers.Remove(sess.ID)
 	}
 }
 
 //CleanSession remove session from subscribers
 func (t *Tracker) CleanSession(sess *Session) {
-	delete(t.subscribers, sess.ID)
+	t.subscribers.Remove(sess.ID)
 }
 
 //Close clean the tracker
 func (t *Tracker) Close() {
-	for _, client := range t.upstreams {
+	t.upstreams.RLock()
+	for _, c := range t.upstreams.Map {
+		client, _ := c.(*MqClient)
 		client.Close()
 	}
-	t.upstreams = make(map[string]*MessageClient)
+	t.upstreams.RUnlock()
+	t.upstreams.Clear()
 
-	for _, client := range t.downstreams {
+	t.downstreams.RLock()
+	for _, c := range t.downstreams.Map {
+		client, _ := c.(*MqClient)
 		client.Close()
 	}
-	t.downstreams = make(map[string]*MessageClient)
+	t.downstreams.RUnlock()
+	t.downstreams.Clear()
 }
 
-func (t *Tracker) updateToUpstream(upstream *MessageClient, event *proto.ServerEvent) {
+func (t *Tracker) updateToUpstream(upstream *MqClient, event *proto.ServerEvent) {
 	msg := NewMessage()
 	msg.SetCmd(proto.TrackPub)
 	data, _ := json.Marshal(event)
@@ -145,24 +164,35 @@ func (t *Tracker) updateToUpstream(upstream *MessageClient, event *proto.ServerE
 	upstream.Send(msg)
 }
 
-func (t *Tracker) connectToServer(trackerAddress string) *MessageClient {
-	client := NewMessageClient(trackerAddress, nil) //TODO handle SSL
+func (t *Tracker) connectToServer(trackerAddress *proto.ServerAddress) *MqClient {
+	var certFile *string
+	if trackerAddress.SslEnabled {
+		config := t.server.Config
+		if file, ok := config.CertFileTable[trackerAddress.Address]; ok {
+			fileFullPath := path.Join(config.CertFileDir, file)
+			certFile = &fileFullPath
+		} else {
+			log.Printf("Missing certificate file to TLS/SSL connecting to (%s)", trackerAddress.Address)
+			return nil
+		}
+	}
+	client := NewMqClient(trackerAddress.Address, certFile)
 	return client
 }
 
 /////////////////////////////Handlers for Tracker//////////////////////////////////
 //trackerHandler serve SrackerInfo request
-func trackerHandler(s *ServerHandler, req *Message, sess *Session) {
+func trackerHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
-	info := s.server.trackerInfo()
+	info := s.trackerInfo()
 	data, _ := json.Marshal(info)
 	reply(200, req.Id(), string(data), sess)
 }
 
 //trackPubHandler server publish of ServerInfo
-func trackPubHandler(s *ServerHandler, req *Message, sess *Session) {
+func trackPubHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
@@ -172,51 +202,52 @@ func trackPubHandler(s *ServerHandler, req *Message, sess *Session) {
 		log.Printf("TrackPub message format error\n")
 		return
 	}
-	serverInfo := event.ServerInfo
-	if serverInfo.ServerAddress == s.server.ServerAddress {
+	pubServer := event.ServerInfo
+	if pubServer.ServerAddress == s.ServerAddress {
 		return //no need to hanle data from same server
 	}
 	tracker := s.tracker
-	addressKey := serverInfo.ServerAddress.Address
-	client := tracker.downstreams[addressKey]
+	addressKey := pubServer.ServerAddress.Address
+	client, _ := tracker.downstreams.Get(addressKey).(*MqClient)
 	if event.Live {
-		tracker.serverTable[addressKey] = serverInfo
+		tracker.serverTable.Set(addressKey, pubServer)
 	} else {
-		delete(tracker.serverTable, addressKey)
+		tracker.serverTable.Remove(addressKey)
 		if client != nil {
-			delete(tracker.downstreams, addressKey)
+			tracker.downstreams.Remove(addressKey)
 			client.Close()
 		}
 	}
 
 	if event.Live && client == nil { //new downstream server joined
-		client := tracker.connectToServer(serverInfo.ServerAddress.Address)
+		client := tracker.connectToServer(pubServer.ServerAddress)
 
-		client.onConnected = func(c *MessageClient) {
-			log.Printf("Server(%s) in track", serverInfo.ServerAddress.String())
-			tracker.downstreams[addressKey] = client
-			tracker.Publish()
+		client.onConnected = func(c *MqClient) {
+			log.Printf("Server(%s) in track", pubServer.ServerAddress.String())
+			tracker.downstreams.Set(addressKey, client)
+			tracker.PubToSubscribers()
 		}
-		client.onDisconnected = func(c *MessageClient) {
-			log.Printf("Server(%s) lost of tracking", serverInfo.ServerAddress.String())
-			delete(tracker.serverTable, addressKey)
-			tracker.Publish()
+		client.onDisconnected = func(c *MqClient) {
+			log.Printf("Server(%s) lost of tracking", pubServer.ServerAddress.String())
+			tracker.serverTable.Remove(addressKey)
+			tracker.downstreams.Remove(addressKey)
+			tracker.PubToSubscribers()
 			client.Close()
 		}
 		client.Start(nil)
 	}
 
-	tracker.Publish() //publish to subscribers
+	tracker.PubToSubscribers()
 }
 
 //trackSubHandler serve TrackSub request
-func trackSubHandler(s *ServerHandler, req *Message, sess *Session) {
+func trackSubHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
-	s.tracker.subscribers[sess.ID] = sess
+	s.tracker.subscribers.Set(sess.ID, sess)
 
-	info := s.server.trackerInfo()
+	info := s.trackerInfo()
 	data, _ := json.Marshal(info)
 
 	resp := NewMessage()
@@ -224,5 +255,8 @@ func trackSubHandler(s *ServerHandler, req *Message, sess *Session) {
 	resp.SetCmd(proto.TrackPub)
 	resp.SetId(req.Id())
 	resp.SetJsonBody(string(data))
-	sess.WriteMessage(resp)
+	err := sess.WriteMessage(resp)
+	if err != nil {
+		log.Printf("TrackSub write error: %s", err.Error())
+	}
 }

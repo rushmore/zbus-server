@@ -2,8 +2,8 @@
   padding-top: 8px;	
 }
 .navbar-brand > img {
-  width: 36px;
-  height: 36px;  
+  width: 32px;
+  height: 32px;  
   display: inline;
 } 
  
@@ -37,10 +37,24 @@ textarea.log {
 .badge-deactive{
 	color: black;
 	background-color: #777;
+} 
+.add-topic-modal{
+	width: 400px; 
 }
-.modal-content{
-	width: 1000px;
-	height: 600px;
+.add-topic-content{
+	margin-left: 32px;
+	margin-right: 32px;
+	margin-top: 8px;
+	margin-bottom: 16px;
+}
+.add-topic-content div{
+	margin-top: 6px;
+}
+input.topic-item{
+	width: 220px;
+}
+.target{
+	margin-top: 0px;
 }
 .close-box{
 	float: right; 
@@ -58,6 +72,26 @@ textarea.log {
 .modal-header{
 	padding: 10px;
 }
+.modal {
+  text-align: center;
+}
+
+@media screen and (min-width: 768px) { 
+  .modal:before {
+    display: inline-block;
+    vertical-align: middle;
+    content: " ";
+    height: 100%;
+  }
+}
+
+.modal-dialog {
+  display: inline-block;
+  text-align: left;
+  vertical-align: middle;
+}
+
+
 .caption{
 	margin-left: 6px;
 	display: inline;
@@ -116,21 +150,21 @@ textarea.log {
 }
 
 .tgroup tr>td:nth-child(1) {	
-	width: 15%; 
+	width: 12%; 
 }
 .tgroup tr>td:nth-child(2) {	
-	width: 85%;
+	width: 88%;
 }
 
 
 .sgroup tr>td:nth-child(1) {	
-	width: 12%; 
+	width: 16%; 
 }
 .sgroup tr>td:nth-child(2) {	
-	width: 8%;
+	width: 14%;
 }
 .sgroup tr>td:nth-child(3) {	
-	width: 80%;
+	width: 70%;
 }
 
 
@@ -141,10 +175,10 @@ textarea.log {
 	width: 20%;
 }
 .cgroup tr>td:nth-child(3) {	
-	width: 20%;
+	width: 16%;
 }
 .cgroup tr>td:nth-child(4) {	
-	width: 20%;
+	width: 24%;
 }
 .header-ctrl{
 	font-weight: bold;
@@ -152,3 +186,36 @@ textarea.log {
 	line-height: 30px;
 	border-bottom: none;
 } 
+
+.op {
+	float: right; 
+	margin-right: 10px;
+}
+
+.op div {
+	float: left;
+	margin-left: 6px;
+}
+
+.op-del {
+	color: red;
+}
+
+.op2 { 
+	float: left; 
+	margin-left: 10px; 
+	font-weight: bold;
+}
+
+.cap { 
+	float:  left; 
+}
+
+td div.td {
+	margin-left: 10px;
+	float: left;
+}
+
+td div.num{
+	font-weight: bold;
+}

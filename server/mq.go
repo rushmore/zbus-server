@@ -18,7 +18,7 @@ type MessageQueue struct {
 	index    *diskq.Index
 	name     string
 	writer   *diskq.QueueWriter //for Producer to write
-	readers  SyncMap            //also known as ConsumeGroup, string=>*diskq.QueueReader
+	readers  SyncMap            //map[string]*diskq.QueueReader, consume-groups
 	avaiable chan bool
 }
 
@@ -44,7 +44,7 @@ func LoadMqTable(baseDir string) (map[string]*MessageQueue, error) {
 			log.Printf("Load MQ(%s) failed, error: %s", fileName, err)
 			continue
 		}
-		table[fileName] = q
+		table[strings.ToLower(fileName)] = q
 	}
 
 	return table, nil
@@ -138,30 +138,9 @@ func (q *MessageQueue) WriteBatch(msgs []*Message) error {
 	return err
 }
 
-//Read a message from MQ' consume group
-func (q *MessageQueue) Read(group string) (*Message, int, error) {
-	if group == "" {
-		group = q.name //default to topic name
-	}
-	r, _ := q.readers.Get(group).(*diskq.QueueReader)
-	if r == nil {
-		return nil, 404, fmt.Errorf("ConsumeGroup(%s) not found", group)
-	}
-	data, err := r.Read()
-	if err != nil {
-		return nil, 500, err
-	}
-	if data == nil {
-		<-r.Available //wait for signal
-		return q.Read(group)
-	}
-	buf := bytes.NewBuffer(data.Body)
-	return DecodeMessage(buf), 200, nil
-}
-
 //ConsumeGroup returns reader for the consume group
 func (q *MessageQueue) ConsumeGroup(group string) *diskq.QueueReader {
-	g, _ := q.readers.Get(group).(*diskq.QueueReader)
+	g, _ := q.readers.Get(strings.ToLower(group)).(*diskq.QueueReader)
 	return g
 }
 
@@ -171,7 +150,7 @@ func (q *MessageQueue) DeclareGroup(group *ConsumeGroup) (*proto.ConsumeGroupInf
 	if groupName == "" {
 		groupName = q.name
 	}
-	g, _ := q.readers.Get(groupName).(*diskq.QueueReader)
+	g, _ := q.readers.Get(strings.ToLower(groupName)).(*diskq.QueueReader)
 	if g == nil { //Create new consume group reader
 		var g2 *diskq.QueueReader
 		var err error
@@ -192,7 +171,7 @@ func (q *MessageQueue) DeclareGroup(group *ConsumeGroup) (*proto.ConsumeGroupInf
 				return nil, err
 			}
 		}
-		q.readers.Set(groupName, g)
+		q.readers.Set(strings.ToLower(groupName), g)
 	}
 
 	if group.Filter != nil {
@@ -208,7 +187,7 @@ func (q *MessageQueue) DeclareGroup(group *ConsumeGroup) (*proto.ConsumeGroupInf
 
 //RemoveGroup remove a consume group
 func (q *MessageQueue) RemoveGroup(group string) error {
-	g := q.readers.Remove(group)
+	g := q.readers.Remove(strings.ToLower(group))
 	if g == nil {
 		return nil
 	}
@@ -247,7 +226,7 @@ func (q *MessageQueue) TopicInfo() *proto.TopicInfo {
 
 //GroupInfo returns consume group info
 func (q *MessageQueue) GroupInfo(group string) *proto.ConsumeGroupInfo {
-	g, _ := q.readers.Get(group).(*diskq.QueueReader)
+	g, _ := q.readers.Get(strings.ToLower(group)).(*diskq.QueueReader)
 	if g != nil {
 		return q.groupInfo(g)
 	}
@@ -316,7 +295,7 @@ func (q *MessageQueue) loadReaders() error {
 		if err != nil {
 			log.Printf("Reader %s load error: %s", fileName, err)
 		}
-		q.readers.Set(name, r)
+		q.readers.Set(strings.ToLower(name), r)
 	}
 	return nil
 }
@@ -363,7 +342,9 @@ type ConsumeGroup struct {
 
 //WriteTo message
 func (g *ConsumeGroup) WriteTo(m *Message) {
-	m.SetConsumeGroup(g.GroupName)
+	if g.GroupName != "" {
+		m.SetConsumeGroup(g.GroupName)
+	}
 	if g.Filter != nil {
 		m.SetGroupFilter(*g.Filter)
 	}

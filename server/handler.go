@@ -10,10 +10,6 @@ import (
 	"./proto"
 )
 
-const (
-	lastConsumeMsgIDKey = "msgid"
-)
-
 var restCommands = []string{
 	proto.Produce,
 	proto.Consume,
@@ -32,27 +28,7 @@ func isRestCommand(cmd string) bool {
 	return false
 }
 
-//ServerHandler manages session from clients
-type ServerHandler struct {
-	SessionTable  SyncMap                                             //Safe
-	handlerTable  map[string]func(*ServerHandler, *Message, *Session) //readonly
-	consumerTable *consumerTable
-
-	serverAddress string
-	server        *Server
-	tracker       *Tracker
-}
-
-//NewServerHandler create ServerSessionHandler
-func NewServerHandler(server *Server) *ServerHandler {
-	s := &ServerHandler{}
-	s.SessionTable.Map = make(map[string]interface{})
-	s.consumerTable = server.consumerTable
-	s.handlerTable = make(map[string]func(*ServerHandler, *Message, *Session))
-	s.serverAddress = server.ServerAddress.Address
-	s.server = server
-	s.tracker = server.tracker
-
+func (s *Server) initServerHandler() {
 	s.handlerTable["favicon.ico"] = faviconHandler
 	s.handlerTable[proto.Heartbeat] = heartbeatHandler
 
@@ -73,23 +49,22 @@ func NewServerHandler(server *Server) *ServerHandler {
 	s.handlerTable[proto.Server] = serverHandler
 	s.handlerTable[proto.TrackPub] = trackPubHandler
 	s.handlerTable[proto.TrackSub] = trackSubHandler
-	return s
 }
 
 //Created when new session from client joined
-func (s *ServerHandler) Created(sess *Session) {
+func (s *Server) Created(sess *Session) {
 	log.Printf("Session(%s) Created", sess)
 	s.SessionTable.Set(sess.ID, sess)
 }
 
 //ToDestroy when connection from client going to close
-func (s *ServerHandler) ToDestroy(sess *Session) {
+func (s *Server) ToDestroy(sess *Session) {
 	log.Printf("Session(%s) Destroyed", sess)
 	s.cleanSession(sess)
 }
 
 //OnError when socket error occured
-func (s *ServerHandler) OnError(err error, sess *Session) {
+func (s *Server) OnError(err error, sess *Session) {
 	log.Printf("Session(%s) Error: %s", sess, err)
 	select {
 	case sess.Broken <- true:
@@ -98,7 +73,15 @@ func (s *ServerHandler) OnError(err error, sess *Session) {
 	s.cleanSession(sess)
 }
 
-func (s *ServerHandler) cleanSession(sess *Session) {
+//OnIdle when connection from client idled
+func (s *Server) OnIdle(sess *Session) {
+	log.Printf("Session(%s) Idled", sess)
+	s.cleanSession(sess)
+}
+
+func (s *Server) cleanSession(sess *Session) {
+	sess.Close()
+
 	s.tracker.CleanSession(sess)
 	s.SessionTable.Remove(sess.ID)
 
@@ -118,18 +101,18 @@ func (s *ServerHandler) cleanSession(sess *Session) {
 	sess.ConsumerCtx.RUnlock()
 
 	if isConsumer {
-		s.tracker.Publish()
+		s.tracker.PubToAll()
 	}
 }
 
-func (s *ServerHandler) cleanMq(topic string) {
+func (s *Server) cleanMq(topic string) {
 	s.consumerTable.removeSession(nil, topic, "")
 }
 
 //OnMessage when message available on socket
-func (s *ServerHandler) OnMessage(msg *Message, sess *Session) {
+func (s *Server) OnMessage(msg *Message, sess *Session) {
 	msg.SetHeader(proto.Sender, sess.ID)
-	msg.SetHeader(proto.Host, s.serverAddress)
+	msg.SetHeader(proto.Host, s.ServerAddress.Address)
 	if msg.Id() == "" {
 		msg.SetId(uuid())
 	}
@@ -233,17 +216,17 @@ func handleUrlRpc(msg *Message, rest string, kvstr string) {
 	msg.SetBody(data)
 }
 
-func auth(s *ServerHandler, msg *Message, sess *Session) bool {
+func auth(s *Server, msg *Message, sess *Session) bool {
 	return true
 }
 
-func findMQ(s *ServerHandler, req *Message, sess *Session) *MessageQueue {
+func findMQ(s *Server, req *Message, sess *Session) *MessageQueue {
 	topic := req.Topic()
 	if topic == "" {
 		reply(400, req.Id(), "Missing topic", sess)
 		return nil
 	}
-	mq := s.server.MqTable[topic]
+	mq, _ := s.MqTable.Get(strings.ToLower(topic)).(*MessageQueue)
 	if mq == nil {
 		body := fmt.Sprintf("Topic(%s) not found", topic)
 		reply(404, req.Id(), body, sess)
@@ -252,7 +235,7 @@ func findMQ(s *ServerHandler, req *Message, sess *Session) *MessageQueue {
 	return mq
 }
 
-func produceHandler(s *ServerHandler, req *Message, sess *Session) {
+func produceHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
@@ -269,7 +252,12 @@ func produceHandler(s *ServerHandler, req *Message, sess *Session) {
 	}
 }
 
-func consumeHandler(s *ServerHandler, req *Message, sess *Session) {
+type consumeContext struct {
+	msgid      string
+	processing bool
+}
+
+func consumeHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
@@ -282,31 +270,37 @@ func consumeHandler(s *ServerHandler, req *Message, sess *Session) {
 	if group == "" {
 		group = topic
 	}
-
-	newConsumer := false
-	if sess.getConsumerCtx(topic, group) == nil {
-		s.consumerTable.addSession(sess, topic, group)
-		newConsumer = true
-	}
-
-	sess.setConsumerCtx(topic, group, req.Id())
-
-	if newConsumer {
-		go s.tracker.Publish()
-	}
-
 	reader := mq.ConsumeGroup(group)
 	if reader == nil {
 		reply(404, req.Id(), fmt.Sprintf("ConsumeGroup(%s) not found", group), sess)
 		return
 	}
 
+	newConsumer := false
+	ctx, _ := sess.getConsumerCtx(topic, group).(*consumeContext)
+	if ctx == nil {
+		s.consumerTable.addSession(sess, topic, group)
+		newConsumer = true
+		ctx = &consumeContext{req.Id(), false}
+		sess.setConsumerCtx(topic, group, ctx)
+	}
+	if newConsumer {
+		go s.tracker.PubToAll()
+	}
+
+	ctx.msgid = req.Id() //update msgid
+	if ctx.processing {
+		return
+	}
+	//process
+	ctx.processing = true
+
 consumeRead:
 	for {
 		data, err := reader.Read()
 		if err != nil {
 			reply(500, req.Id(), fmt.Sprintf("Consume read error: %s", err.Error()), sess)
-			return
+			break consumeRead
 		}
 
 		if data == nil {
@@ -317,13 +311,17 @@ consumeRead:
 			}
 			continue
 		}
-
+		ctx.processing = false
 		buf := bytes.NewBuffer(data.Body)
-		resp := DecodeMessage(buf)
+		resp, err := DecodeMessage(buf)
+		if err != nil {
+			reply(500, req.Id(), fmt.Sprintf("Consume read error: %s", err.Error()), sess)
+			break consumeRead
+		}
 
 		resp.SetOriginId(resp.Id())
-		msgid, _ := sess.getConsumerCtx(topic, group).(string)
-		resp.SetId(msgid)
+		ctx, _ := sess.getConsumerCtx(topic, group).(*consumeContext)
+		resp.SetId(ctx.msgid)
 		if resp.Status == 0 {
 			resp.Status = 200
 			resp.SetOriginUrl(resp.Url)
@@ -333,12 +331,12 @@ consumeRead:
 	}
 }
 
-func rpcHandler(s *ServerHandler, req *Message, sess *Session) {
+func rpcHandler(s *Server, req *Message, sess *Session) {
 	req.SetAck(false)
 	produceHandler(s, req, sess)
 }
 
-func routeHandler(s *ServerHandler, req *Message, sess *Session) {
+func routeHandler(s *Server, req *Message, sess *Session) {
 	recver := req.Recver()
 	if recver == "" {
 		log.Printf("Warn: missing recver")
@@ -364,7 +362,7 @@ func routeHandler(s *ServerHandler, req *Message, sess *Session) {
 	target.WriteMessage(req)
 }
 
-func declareHandler(s *ServerHandler, req *Message, sess *Session) {
+func declareHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
@@ -383,9 +381,9 @@ func declareHandler(s *ServerHandler, req *Message, sess *Session) {
 	var err error
 	var info interface{}
 
-	mq := s.server.MqTable[topic]
+	mq, _ := s.MqTable.Get(strings.ToLower(topic)).(*MessageQueue)
 	if mq == nil {
-		mq, err = NewMessageQueue(s.server.MqDir, topic)
+		mq, err = NewMessageQueue(s.Config.MqDir, topic)
 		if err != nil {
 			body := fmt.Sprintf("Delcare Topic error: %s", err.Error())
 			reply(500, req.Id(), body, sess)
@@ -396,7 +394,7 @@ func declareHandler(s *ServerHandler, req *Message, sess *Session) {
 		if mask != nil {
 			mq.SetMask(*mask)
 		}
-		s.server.MqTable[topic] = mq
+		s.MqTable.Set(strings.ToLower(topic), mq)
 
 		info, err = mq.DeclareGroup(g)
 		if err != nil {
@@ -424,14 +422,14 @@ func declareHandler(s *ServerHandler, req *Message, sess *Session) {
 		info = mq.TopicInfo()
 	}
 
-	s.server.addServerContext(info) //require server info attach
+	s.addServerContext(info) //require server info attach
 	data, _ := json.Marshal(info)
 	replyJson(200, req.Id(), string(data), sess)
 
-	s.tracker.Publish()
+	s.tracker.PubToAll()
 }
 
-func queryHandler(s *ServerHandler, req *Message, sess *Session) {
+func queryHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
@@ -454,12 +452,12 @@ func queryHandler(s *ServerHandler, req *Message, sess *Session) {
 		info = groupInfo
 	}
 
-	s.server.addServerContext(info)
+	s.addServerContext(info)
 	data, _ := json.Marshal(info)
 	replyJson(200, req.Id(), string(data), sess)
 }
 
-func removeHandler(s *ServerHandler, req *Message, sess *Session) {
+func removeHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
@@ -470,7 +468,7 @@ func removeHandler(s *ServerHandler, req *Message, sess *Session) {
 	topic := mq.Name()
 	group := req.ConsumeGroup()
 	if group == "" {
-		delete(s.server.MqTable, mq.Name())
+		s.MqTable.Remove(strings.ToLower(topic))
 		err := mq.Destroy()
 		if err != nil {
 			body := fmt.Sprintf("Remove topic(%s) error: %s", topic, err.Error())
@@ -494,24 +492,24 @@ func removeHandler(s *ServerHandler, req *Message, sess *Session) {
 
 	reply(200, req.Id(), fmt.Sprintf("%d", CurrMillis()), sess)
 
-	s.tracker.Publish()
+	s.tracker.PubToAll()
 }
 
-func emptyHandler(s *ServerHandler, req *Message, sess *Session) {
+func emptyHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
 	reply(500, req.Id(), "Not Implemented", sess)
 }
 
-func serverHandler(s *ServerHandler, req *Message, sess *Session) {
+func serverHandler(s *Server, req *Message, sess *Session) {
 	if !auth(s, req, sess) {
 		return
 	}
 
 	res := NewMessage()
 	res.Status = 200
-	info := s.server.serverInfo()
+	info := s.serverInfo()
 	data, _ := json.Marshal(info)
 	replyJson(200, req.Id(), string(data), sess)
 }
@@ -529,7 +527,7 @@ func replyJson(status int, msgid string, body string, sess *Session) {
 	sess.WriteMessage(resp)
 }
 
-func renderFile(file string, contentType string, s *ServerHandler, msg *Message, sess *Session) {
+func renderFile(file string, contentType string, s *Server, msg *Message, sess *Session) {
 	res := NewMessage()
 	if file == "" {
 		url := msg.Url
@@ -551,46 +549,46 @@ func renderFile(file string, contentType string, s *ServerHandler, msg *Message,
 	sess.WriteMessage(res)
 }
 
-func homeHandler(s *ServerHandler, msg *Message, sess *Session) {
+func homeHandler(s *Server, msg *Message, sess *Session) {
 	renderFile("home.htm", "text/html", s, msg, sess)
 }
 
-func faviconHandler(s *ServerHandler, msg *Message, sess *Session) {
+func faviconHandler(s *Server, msg *Message, sess *Session) {
 	renderFile("logo.svg", "image/svg+xml", s, msg, sess)
 }
 
-func jsHandler(s *ServerHandler, msg *Message, sess *Session) {
+func jsHandler(s *Server, msg *Message, sess *Session) {
 	renderFile("", "application/javascript", s, msg, sess)
 }
 
-func cssHandler(s *ServerHandler, msg *Message, sess *Session) {
+func cssHandler(s *Server, msg *Message, sess *Session) {
 	renderFile("", "text/css", s, msg, sess)
 }
 
-func imgHandler(s *ServerHandler, msg *Message, sess *Session) {
+func imgHandler(s *Server, msg *Message, sess *Session) {
 	renderFile("", "image/svg+xml", s, msg, sess)
 }
 
-func pageHandler(s *ServerHandler, msg *Message, sess *Session) {
+func pageHandler(s *Server, msg *Message, sess *Session) {
 	renderFile("", "text/html", s, msg, sess)
 }
 
-func heartbeatHandler(s *ServerHandler, msg *Message, sess *Session) {
+func heartbeatHandler(s *Server, msg *Message, sess *Session) {
 	//just ignore
 }
 
-//topic=> { group => {SessId => Session} }
-type consumerTable struct {
+//ConsumerTable topic=> { group => {SessId => Session} }
+type ConsumerTable struct {
 	SyncMap
 }
 
-func newConsumerTable() *consumerTable {
-	c := &consumerTable{}
+func newConsumerTable() *ConsumerTable {
+	c := &ConsumerTable{}
 	c.Map = make(map[string]interface{})
 	return c
 }
 
-func (t *consumerTable) addSession(sess *Session, topic string, group string) bool {
+func (t *ConsumerTable) addSession(sess *Session, topic string, group string) bool {
 	t.Lock()
 	groups, _ := t.Map[topic].(*SyncMap)
 	if groups == nil {
@@ -611,7 +609,7 @@ func (t *consumerTable) addSession(sess *Session, topic string, group string) bo
 	return newSession
 }
 
-func (t *consumerTable) removeSession(sess *Session, topic string, group string) {
+func (t *ConsumerTable) removeSession(sess *Session, topic string, group string) {
 	groups := t.Get(topic).(*SyncMap)
 	if groups == nil {
 		return //ignore
@@ -629,7 +627,7 @@ func (t *consumerTable) removeSession(sess *Session, topic string, group string)
 	}
 }
 
-func (t *consumerTable) countForTopic(topic string) int {
+func (t *ConsumerTable) countForTopic(topic string) int {
 	groups, _ := t.Get(topic).(*SyncMap)
 	if groups == nil {
 		return 0
@@ -647,7 +645,7 @@ func (t *consumerTable) countForTopic(topic string) int {
 	return n
 }
 
-func (t *consumerTable) countForGroup(topic string, group string) int {
+func (t *ConsumerTable) countForGroup(topic string, group string) int {
 	groups, _ := t.Get(topic).(*SyncMap)
 	if groups == nil {
 		return 0

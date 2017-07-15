@@ -21,8 +21,8 @@ const (
 	IndexSize  = HeaderSize + BlockMaxCount*OffsetSize
 	ReaderSize = HeaderSize
 
-	BlockCountPos   = 4
-	MessageCountPos = 16
+	BlockCountPos = 4
+	MsgNoPos      = 16
 )
 
 //Offset points to the block
@@ -175,7 +175,7 @@ func (idx *Index) AddMsgNo(delta int) {
 	defer idx.mutex.Unlock()
 
 	idx.msgNo += int64(delta)
-	idx.buf.SetPos(MessageCountPos)
+	idx.buf.SetPos(MsgNoPos)
 	idx.buf.PutInt64(idx.msgNo)
 }
 
@@ -185,7 +185,7 @@ func (idx *Index) GetAndAddMsgNo(delta int) int64 {
 	defer idx.mutex.Unlock()
 	msgNo := idx.msgNo
 	idx.msgNo += int64(delta)
-	idx.buf.SetPos(MessageCountPos)
+	idx.buf.SetPos(MsgNoPos)
 	idx.buf.PutInt64(idx.msgNo)
 	return msgNo
 }

@@ -6,73 +6,12 @@ import (
 	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"./proto"
 )
-
-//SyncMap safe map
-type SyncMap struct {
-	Map map[string]interface{}
-	sync.RWMutex
-}
-
-//Get by key
-func (m *SyncMap) Get(key string) interface{} {
-	m.RLock()
-	defer m.RUnlock()
-	val, ok := m.Map[key]
-	if !ok {
-		return nil
-	}
-	return val
-}
-
-//Set key-value pair
-func (m *SyncMap) Set(key string, val interface{}) {
-	m.Lock()
-	defer m.Unlock()
-	m.Map[key] = val
-}
-
-//Remove key
-func (m *SyncMap) Remove(key string) interface{} {
-	m.Lock()
-	defer m.Unlock()
-	val := m.Map[key]
-	delete(m.Map, key)
-	return val
-}
-
-//Copy as map[string]string
-func (m *SyncMap) Copy() map[string]string {
-	m.RLock()
-	defer m.RUnlock()
-
-	res := make(map[string]string)
-	for key, val := range m.Map {
-		value, ok := val.(string)
-		if ok {
-			res[key] = value
-		}
-	}
-	return res
-}
-
-//Contains check key exists
-func (m *SyncMap) Contains(key string) bool {
-	m.RLock()
-	defer m.RUnlock()
-	_, ok := m.Map[key]
-	return ok
-}
-
-//Clear all key-values
-func (m *SyncMap) Clear() {
-	m.Lock()
-	defer m.Unlock()
-	m.Map = make(map[string]interface{})
-}
 
 //UUID generate psudo uuid string
 func uuid() string {
@@ -122,12 +61,12 @@ func SplitClean(s string, sep string) []string {
 }
 
 //ServerAddress find the real address
-func ServerAddress(addr string) string {
-	bb := SplitClean(addr, ":")
+func ServerAddress(addr string) (string, int) {
+	bb := strings.Split(addr, ":")
 	host := bb[0]
-	port := "80"
+	port := 80
 	if len(bb) > 1 {
-		port = bb[1]
+		port, _ = strconv.Atoi(bb[1])
 	}
 	if host == "0.0.0.0" || host == "" {
 		ip, err := LocalIPAddress()
@@ -135,7 +74,7 @@ func ServerAddress(addr string) string {
 			host = ip.String()
 		}
 	}
-	return fmt.Sprintf("%s:%s", host, port)
+	return host, port
 }
 
 type byIP []net.IP
@@ -211,4 +150,30 @@ func EnsureDir(dir string) error {
 		}
 	}
 	return nil
+}
+
+//ParseServerAddressList parse server address list
+func ParseServerAddressList(addr string) []*proto.ServerAddress {
+	addrList := SplitClean(addr, ";")
+	var res []*proto.ServerAddress
+	for _, addr := range addrList {
+		if addr == "" {
+			continue
+		}
+		serverAddr := &proto.ServerAddress{}
+		if strings.HasPrefix(strings.ToUpper(addr), "[SSL]") {
+			addr = addr[5:len(addr)]
+			serverAddr.Address = addr
+			serverAddr.SslEnabled = true
+		} else {
+			serverAddr.Address = addr
+			serverAddr.SslEnabled = false
+		}
+		res = append(res, serverAddr)
+	}
+	if res == nil {
+		return []*proto.ServerAddress{}
+	}
+
+	return res
 }

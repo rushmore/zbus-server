@@ -2,62 +2,97 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"sync"
 	"time"
+
+	"./proto"
 )
 
-//MessageClient TCP client using Message type
-type MessageClient struct {
+//MqClient TCP client using Message type
+type MqClient struct {
 	conn       *net.TCPConn
 	address    string
 	sslEnabled bool
 	certFile   string
 	bufRead    *bytes.Buffer
 
-	msgTable      map[string]*Message
+	msgTable      SyncMap //map[string]*Message
 	timeout       time.Duration
 	autoReconnect bool
-	mutex         *sync.Mutex
+	mutex         sync.Mutex
 
-	onConnected    func(*MessageClient)
-	onDisconnected func(*MessageClient)
-	onMessage      func(*MessageClient, *Message)
+	heartbeatInterval time.Duration
+	stopHeartbeat     chan bool
+
+	onConnected    func(*MqClient)
+	onDisconnected func(*MqClient)
+	onMessage      func(*MqClient, *Message)
+
+	token string
 }
 
-//NewMessageClient create message client, if sslEnabled, certFile should be provided
-func NewMessageClient(address string, certFile *string) *MessageClient {
-	c := &MessageClient{}
+//NewMqClient create message client, if sslEnabled, certFile should be provided
+func NewMqClient(address string, certFile *string) *MqClient {
+	c := &MqClient{}
 	c.address = address
 	c.bufRead = new(bytes.Buffer)
-	c.msgTable = make(map[string]*Message)
 	c.timeout = 3000 * time.Millisecond
-	c.mutex = &sync.Mutex{}
+	c.heartbeatInterval = 30 * time.Second
+
+	c.msgTable.Map = make(map[string]interface{})
 	if certFile != nil {
 		c.sslEnabled = true
 		c.certFile = *certFile
 	}
+	go c.heartbeat() //start heatbeat by default
 	return c
 }
 
+func (c *MqClient) heartbeat() {
+hearbeat:
+	for {
+		select {
+		case <-time.After(c.heartbeatInterval):
+		case <-c.stopHeartbeat:
+			break hearbeat
+		}
+
+		if c.conn == nil {
+			continue
+		}
+		msg := NewMessage()
+		msg.SetCmd(proto.Heartbeat)
+
+		err := c.Send(msg)
+		if err != nil {
+			log.Printf("Sending heartbeat error: %s", err.Error())
+		}
+	}
+}
+
 //Connect to server
-func (c *MessageClient) Connect() error {
+func (c *MqClient) Connect() error {
 	if c.conn != nil {
 		return nil
 	}
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	if c.conn != nil {
+		c.mutex.Unlock()
 		return nil
 	}
 
 	log.Printf("Trying connect to %s\n", c.address)
 	conn, err := net.DialTimeout("tcp", c.address, c.timeout)
 	if err != nil {
+		c.mutex.Unlock()
 		return err
 	}
+	c.mutex.Unlock()
 	c.conn = conn.(*net.TCPConn)
 	if c.onConnected != nil {
 		c.onConnected(c)
@@ -68,12 +103,16 @@ func (c *MessageClient) Connect() error {
 }
 
 //Close client
-func (c *MessageClient) Close() {
+func (c *MqClient) Close() {
 	c.autoReconnect = false
-	c.close()
+	select {
+	case c.stopHeartbeat <- true:
+	default:
+	}
+	c.closeConn()
 }
 
-func (c *MessageClient) close() {
+func (c *MqClient) closeConn() {
 	if c.conn == nil {
 		return
 	}
@@ -81,8 +120,13 @@ func (c *MessageClient) close() {
 	c.conn = nil
 }
 
+//SetToken set security token
+func (c *MqClient) SetToken(token string) {
+	c.token = token
+}
+
 //Invoke message to server and get reply matching msgid
-func (c *MessageClient) Invoke(req *Message) (*Message, error) {
+func (c *MqClient) Invoke(req *Message) (*Message, error) {
 	err := c.Send(req)
 	if err != nil {
 		return nil, err
@@ -92,7 +136,7 @@ func (c *MessageClient) Invoke(req *Message) (*Message, error) {
 }
 
 //Send Message
-func (c *MessageClient) Send(req *Message) error {
+func (c *MqClient) Send(req *Message) error {
 	err := c.Connect() //connect if needs
 	if err != nil {
 		return err
@@ -119,16 +163,16 @@ func (c *MessageClient) Send(req *Message) error {
 }
 
 //Recv Message
-func (c *MessageClient) Recv(msgid *string) (*Message, error) {
+func (c *MqClient) Recv(msgid *string) (*Message, error) {
 	err := c.Connect() //connect if needs
 	if err != nil {
 		return nil, err
 	}
 	for {
 		if msgid != nil {
-			msg := c.msgTable[*msgid]
+			msg, _ := c.msgTable.Get(*msgid).(*Message)
 			if msg != nil {
-				delete(c.msgTable, *msgid)
+				c.msgTable.Remove(*msgid)
 				return msg, nil
 			}
 		}
@@ -139,7 +183,10 @@ func (c *MessageClient) Recv(msgid *string) (*Message, error) {
 			return nil, err
 		}
 		c.bufRead.Write(data[0:n])
-		resp := DecodeMessage(c.bufRead)
+		resp, err := DecodeMessage(c.bufRead)
+		if err != nil {
+			return nil, err
+		}
 		if resp == nil {
 			bufRead2 := new(bytes.Buffer)
 			bufRead2.Write(c.bufRead.Bytes())
@@ -151,18 +198,19 @@ func (c *MessageClient) Recv(msgid *string) (*Message, error) {
 		if msgid == nil || respId == "" || respId == *msgid {
 			return resp, nil
 		}
-		c.msgTable[respId] = resp
+		c.msgTable.Set(respId, resp)
 	}
 }
 
 //EnsureConnected trying to connect the client util success
-func (c *MessageClient) EnsureConnected(notify chan bool) {
+func (c *MqClient) EnsureConnected(notify chan bool) {
 	go func() {
 		for {
 			err := c.Connect()
 			if err == nil {
 				break
 			}
+			log.Printf("Connection to(%s) failed: %s", c.address, err.Error())
 			time.Sleep(c.timeout)
 		}
 		if notify != nil {
@@ -172,7 +220,7 @@ func (c *MessageClient) EnsureConnected(notify chan bool) {
 }
 
 //Start a goroutine to recv message from server
-func (c *MessageClient) Start(notify chan bool) {
+func (c *MqClient) Start(notify chan bool) {
 	c.autoReconnect = true
 	go func() {
 	for_loop:
@@ -188,7 +236,7 @@ func (c *MessageClient) Start(notify chan bool) {
 			if err, ok := err.(net.Error); ok && err.Timeout() {
 				continue
 			}
-			c.close()
+			c.closeConn()
 			if c.onDisconnected != nil {
 				c.onDisconnected(c)
 			}
@@ -208,4 +256,211 @@ func (c *MessageClient) Start(notify chan bool) {
 			notify <- true
 		}
 	}()
+}
+
+func (c *MqClient) invokeCmd(req *Message, info interface{}) error {
+	req.SetToken(c.token)
+	resp, err := c.Invoke(req)
+	if err != nil {
+		return err
+	}
+	if resp.Status != 200 {
+		err = fmt.Errorf("Status=%d, Error=%s", resp.Status, string(resp.body))
+		errInfo, _ := info.(*proto.ErrInfo)
+		if errInfo != nil {
+			errInfo.Error = err
+		} else {
+			return err
+		}
+	} else {
+		if info != nil {
+			err = json.Unmarshal(resp.body, info)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+//QueryTracker read tracker info from Tracker
+func (c *MqClient) QueryTracker() (*proto.TrackerInfo, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Tracker)
+
+	info := &proto.TrackerInfo{}
+	err := c.invokeCmd(req, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, err
+}
+
+//QueryServer read server info from MqServer
+func (c *MqClient) QueryServer() (*proto.ServerInfo, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Server)
+
+	info := &proto.ServerInfo{}
+	err := c.invokeCmd(req, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, err
+}
+
+//QueryTopic read topic info from MqServer
+func (c *MqClient) QueryTopic(topic string) (*proto.TopicInfo, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Query)
+	req.SetTopic(topic)
+
+	info := &proto.TopicInfo{}
+	err := c.invokeCmd(req, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, err
+}
+
+//QueryGroup read consume-group info from MqServer
+func (c *MqClient) QueryGroup(topic string, group string) (*proto.ConsumeGroupInfo, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Query)
+	req.SetTopic(topic)
+	req.SetConsumeGroup(group)
+
+	info := &proto.ConsumeGroupInfo{}
+	err := c.invokeCmd(req, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, err
+}
+
+//DeclareTopic creator or update topic
+func (c *MqClient) DeclareTopic(topic string, mask *int32) (*proto.TopicInfo, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Declare)
+	req.SetTopic(topic)
+	if mask != nil {
+		req.SetTopicMask(*mask)
+	}
+
+	info := &proto.TopicInfo{}
+	err := c.invokeCmd(req, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, err
+}
+
+//DeclareGroup creator or update consume-group
+func (c *MqClient) DeclareGroup(topic string, group *ConsumeGroup) (*proto.ConsumeGroupInfo, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Declare)
+	req.SetTopic(topic)
+	if group != nil {
+		group.WriteTo(req)
+	} else {
+		req.SetConsumeGroup(topic) //default to topic name
+	}
+
+	info := &proto.ConsumeGroupInfo{}
+	err := c.invokeCmd(req, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, err
+}
+
+//RemoveTopic remove topic
+func (c *MqClient) RemoveTopic(topic string) error {
+	req := NewMessage()
+	req.SetCmd(proto.Remove)
+	req.SetTopic(topic)
+
+	err := c.invokeCmd(req, nil)
+	return err
+}
+
+//RemoveGroup remove consume-group
+func (c *MqClient) RemoveGroup(topic string, group string) error {
+	req := NewMessage()
+	req.SetCmd(proto.Remove)
+	req.SetTopic(topic)
+	req.SetConsumeGroup(group)
+
+	err := c.invokeCmd(req, nil)
+	return err
+}
+
+//EmptyTopic clear message in topic
+func (c *MqClient) EmptyTopic(topic string) error {
+	req := NewMessage()
+	req.SetCmd(proto.Empty)
+	req.SetTopic(topic)
+
+	err := c.invokeCmd(req, nil)
+	return err
+}
+
+//EmptyGroup clear message in consume-group
+func (c *MqClient) EmptyGroup(topic string, group string) error {
+	req := NewMessage()
+	req.SetCmd(proto.Empty)
+	req.SetTopic(topic)
+	req.SetConsumeGroup(group)
+
+	err := c.invokeCmd(req, nil)
+	return err
+}
+
+//Produce message to zbus server
+//request set Ack false, get nil returned
+func (c *MqClient) Produce(req *Message) (*Message, error) {
+	req.SetCmd(proto.Produce)
+	if req.Ack() {
+		return c.Invoke(req)
+	}
+	return nil, c.Send(req)
+}
+
+//Consume consumes a message from zbus
+func (c *MqClient) Consume(topic string, group *string, window *int32) (*Message, error) {
+	req := NewMessage()
+	req.SetCmd(proto.Consume)
+	req.SetTopic(topic)
+	if group != nil {
+		req.SetConsumeGroup(*group)
+	}
+	if window != nil {
+		req.SetWindow(*window)
+	}
+
+	resp, err := c.Invoke(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.SetId(resp.OriginId())
+	resp.RemoveHeader(proto.OriginId)
+	if resp.Status == 200 {
+		url := resp.OriginUrl()
+		if url != "" {
+			resp.Url = url
+			resp.Status = -1
+			resp.RemoveHeader(proto.OriginUrl)
+		}
+	}
+	return resp, nil
+}
+
+//Route sends route message to zbus to target client, for RPC purpose
+func (c *MqClient) Route(msg *Message) error {
+	msg.SetCmd(proto.Route)
+	if msg.Status > 0 {
+		msg.SetOriginStatus(msg.Status)
+		msg.Status = -1 //make it as request
+	}
+	return c.Send(msg)
 }

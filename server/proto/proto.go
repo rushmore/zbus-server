@@ -51,8 +51,9 @@ const (
 	OriginUrl    = "origin_url"
 	OriginStatus = "origin_status"
 
-	//Security
+	Window = "window"
 
+	//Security
 	Token = "token"
 
 	MaskPause        = 1 << 0
@@ -107,7 +108,7 @@ type TrackerInfo struct {
 type ServerInfo struct {
 	TrackItem   `json:""`
 	InfoVersion int64                 `json:"infoVersion"`
-	TrackerList []ServerAddress       `json:"trackerList"`
+	TrackerList []*ServerAddress      `json:"trackerList"`
 	TopicTable  map[string]*TopicInfo `json:"topicTable"`
 }
 

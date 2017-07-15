@@ -11,3 +11,7 @@ func TestLocalIpAddress(t *testing.T) {
 	}
 	println(ip.String())
 }
+
+func Test_ParseServerAddressList(t *testing.T) {
+	addrList := ParseServerAddressList("")
+}

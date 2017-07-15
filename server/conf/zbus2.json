@@ -1,0 +1,23 @@
+{
+	"serverAddress": "0.0.0.0:15556", 
+	"serverName": "",                
+	"mqDir": "/tmp/zbus2",       
+
+	"trackerList": "localhost:15555", 
+
+	"idleTimeout": 180, 
+	"logDir": "",
+	"trackerOnly": false,  
+
+
+	"sslEnabled": false,
+	"serverCertFile": "./conf/ssl/zbus.crt",
+	"serverKeyFile": "./conf/ssl/zbus.key",    
+	
+	"defaultCertFile": "zbus.crt",
+	"certFileDir": "./conf/ssl",  
+	"certFileTable": {
+		"localhost:15555": "zbus.crt",
+		"localhost:15556": "zbus.crt"
+	}
+}

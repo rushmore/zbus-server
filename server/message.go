@@ -69,6 +69,14 @@ func (m *Message) SetHeaderIfNone(key string, val string) {
 	m.Header.Set(key, val)
 }
 
+//Body returns body as string, nil as "" empty string
+func (m *Message) Body() string {
+	if m.body == nil {
+		return ""
+	}
+	return string(m.body)
+}
+
 //SetBody set binary body of Message
 func (m *Message) SetBody(body []byte) {
 	m.body = body
@@ -95,7 +103,7 @@ func (m *Message) SetJsonBody(body string) {
 
 //EncodeMessage encodes Message to []byte
 func (m *Message) EncodeMessage(buf *bytes.Buffer) {
-	if m.Status != 0 {
+	if m.Status > 0 {
 		buf.WriteString(fmt.Sprintf("HTTP/1.1 %d %s\r\n", m.Status, StatusText(m.Status)))
 	} else {
 		buf.WriteString(fmt.Sprintf("%s %s HTTP/1.1\r\n", m.Method, m.Url))
@@ -134,22 +142,29 @@ func (m *Message) String() string {
 }
 
 //DecodeMessage decode Message from Buffer, nil returned if not enought in buffer
-func DecodeMessage(buf *bytes.Buffer) *Message {
+func DecodeMessage(buf *bytes.Buffer) (*Message, error) {
 	bb := buf.Bytes()
 	idx := bytes.Index(bb, []byte("\r\n\r\n"))
 	if idx == -1 {
-		return nil
+		return nil, nil
 	}
 	m := NewMessage()
 	header := bytes.Split(bb[:idx], []byte("\r\n"))
+	if len(header) < 1 {
+		return nil, fmt.Errorf("HTTP format: Missing first line")
+	}
 	meta := string(header[0])
 	metaFields := strings.Fields(meta)
+	if len(metaFields) < 2 {
+		return nil, fmt.Errorf("HTTP format: first line invalid")
+	}
 	if strings.HasPrefix(strings.ToUpper(metaFields[0]), "HTTP") {
 		m.Status, _ = strconv.Atoi(metaFields[1])
 	} else {
 		m.Method = metaFields[0]
 		m.Url = metaFields[1]
 	}
+
 	for i := 1; i < len(header); i++ {
 		s := string(header[i])
 		kv := strings.SplitN(s, ":", 2)
@@ -166,14 +181,14 @@ func DecodeMessage(buf *bytes.Buffer) *Message {
 		bodyLen, _ = strconv.Atoi(lenStr.(string))
 	}
 	if (buf.Len() - idx - 4) < bodyLen {
-		return nil
+		return nil, nil
 	}
 	if bodyLen > 0 {
 		m.SetBody(bb[idx+4 : idx+4+bodyLen])
 	}
 	data := make([]byte, idx+4+bodyLen)
 	buf.Read(data)
-	return m
+	return m, nil
 }
 
 //////////////////////////////The following are all helper Getter/Setter of Header///////////////////////////
@@ -303,7 +318,10 @@ func (m *Message) GroupMask() *int32 {
 	if s == nil {
 		return nil
 	}
-	value, _ := strconv.Atoi(s.(string))
+	value, err := strconv.Atoi(s.(string))
+	if err != nil {
+		return nil
+	}
 	return &[]int32{int32(value)}[0]
 }
 
@@ -332,7 +350,10 @@ func (m *Message) GroupStartOffset() *int64 {
 	if s == nil {
 		return nil
 	}
-	value, _ := strconv.ParseInt(s.(string), 10, 64)
+	value, err := strconv.ParseInt(s.(string), 10, 64)
+	if err != nil {
+		return nil
+	}
 	return &[]int64{value}[0]
 }
 
@@ -361,7 +382,10 @@ func (m *Message) GroupStartTime() *int64 {
 	if s == nil {
 		return nil
 	}
-	value, _ := strconv.ParseInt(s.(string), 10, 64)
+	value, err := strconv.ParseInt(s.(string), 10, 64)
+	if err != nil {
+		return nil
+	}
 	return &[]int64{value}[0]
 }
 
@@ -411,13 +435,34 @@ func (m *Message) TopicMask() *int32 {
 	if s == nil {
 		return nil
 	}
-	value, _ := strconv.Atoi(s.(string))
+	value, err := strconv.Atoi(s.(string))
+	if err != nil {
+		return nil
+	}
 	return &[]int32{int32(value)}[0]
 }
 
 //SetTopicMask key=topic_mask
 func (m *Message) SetTopicMask(value int32) {
 	m.SetHeader(proto.TopicMask, strconv.Itoa(int(value)))
+}
+
+//Window key=window
+func (m *Message) Window() *int32 {
+	s := m.GetHeaderNil(proto.Window)
+	if s == nil {
+		return nil
+	}
+	value, err := strconv.Atoi(s.(string))
+	if err != nil {
+		return nil
+	}
+	return &[]int32{int32(value)}[0]
+}
+
+//SetWindow key=window
+func (m *Message) SetWindow(value int32) {
+	m.SetHeader(proto.Window, strconv.Itoa(int(value)))
 }
 
 //Recver key=recver
