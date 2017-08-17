@@ -99,7 +99,7 @@ The monitor page keeps evolving, more and more items will be added in.
 
 ## Components
 
-![Archit](https://git.oschina.net/uploads/images/2017/0517/183402_0efce626_7458.png "Archit")
+![Archit](/doc/archit.png?raw=true "Archit")
 
 The above figure shows the 3 major distributed components--**broker**, **producer** and **consumer** 
 
