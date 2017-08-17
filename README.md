@@ -76,7 +76,7 @@ Fast performance test (Apache Benchmark)
 ## MQ and RPC at a glance
 
 In the monitor page [http://localhost:15555](http://localhost:15555) , as you can see, there are two sections
-![Monitor](https://git.oschina.net/uploads/images/2017/0630/162232_543dc692_7458.png "Monitor")
+![Monitor](/doc/monitor.png?raw=true "Monitor")
 1. Tracked Servers
 
 	List all the MqServer joined.
