@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- all configuration are optional, default value populated if not configured -->
+<zbus>     
+	<!-- use trackers to obtain real servers dynamically -->
+	<trackerList>
+		<serverAddress>
+			<address>localhost:15555</address>   
+			<sslEnabled certFile="ssl/zbus.crt">false</sslEnabled> <!-- certFile optional -->
+		</serverAddress>   
+	</trackerList>   
+	
+	<!-- when SSL enabled, search this table for certificate file -->
+	<sslCertFileTable>
+		<sslCertFile address="localhost:15556" certFile="ssl/zbus.crt"/> 
+	</sslCertFileTable> 
+	<!-- when SSL enabled, connect to server need certificate file, if not found, use this default -->
+	<defaultSslCertFile>ssl/zbus.crt</defaultSslCertFile>   
+	
+	<clientPoolSize>32</clientPoolSize> 
+</zbus>
+

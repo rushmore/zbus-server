@@ -17,56 +17,66 @@ zbus carefully designed on its protocol and components to embrace KISS(Keep It S
 - Fast MQ on disk, capable of unicast, multicast and broadcast messaging models
 - Easy RPC support out of box, language agnostic
 - Officially support Java/.NET/Javascript/C_C++/Python/Go/PHP clients
-- Extremely light-weighted, (~1M zipped executable, no dependency)
+- Extremely light-weighted
 - High Availability inside, able to join or leave any distributed components
 - TCP/HTTP/WebSocket, Monitor, all in one port, support DMZ deployment
 - Based on simple protocol: HTTP-header extension, and browser access friendly
 
+## Clients
 
-## Performance
+[zbus-java](https://github.com/rushmore/zbus)
 
-	Single Mac i7 box with SSD, with apache ab -k -c 32 -n 4000000 URL
+[zbus-dotnet](https://github.com/rushmore/zbus-dotnet)
 
-	Produce:  ~70,000/s
-	Consume:  ~60,000/s
-	RPC: ~20,000/s (java service)
+[zbus-javascript](https://github.com/rushmore/zbus-javascript)
 
-## Getting started
-### Installation
-- Build from source
+[zbus-python](https://github.com/rushmore/zbus-python)
 
-Download the source, in server directory
+[zbus-php](https://github.com/rushmore/zbus-php)
 
-	go build  
+[zbus-cpp](https://github.com/rushmore/zbus-cpp)
 
-No dependency just Go!
-
-- Download executable
-
-Directly download from the prebuilt binary.
+[zbus-go](https://github.com/rushmore/zbus-go)
 
 
+## Getting started 
+In zbus-dist directory, just run zbus.bat/sh, JDK6+ required.
 
 Incase you may interest in the client projects, go to zbus source root directory
 
 	git submodule update --init --recursive  
 
-On your favorite OS, run the built zbus binary, access the monitor address
 
-[http://localhost:15555](http://localhost:15555) 
+Maven
 
-You can change the default configuration, in console, type 
+	<dependency>
+		<groupId>io.zbus</groupId>
+		<artifactId>zbus</artifactId>
+		<version>0.9.0-SNAPSHOT</version>
+	</dependency>
 
-	zbus -h             (change the binary name to 'zbus' if by default is 'server')
+## Performance
+Fast performance test (Apache Benchmark)
 
-all self-explained, with configurable items listed such as port to listen, directory to store MQ and log etc.
+	Declare MQ: http://localhost:15555/declare/MyTopic
+	
+	Produce 
+	ab -k -c 32 -n 1000000 http://localhost:15555/produce/MyTopic
+	Consume 
+	ab -k -c 32 -n 1000000 http://localhost:15555/consume/MyTopic
 
+	Single Mac i7 box with SSD 
+	Produce:  ~80,000/s
+	Consume:  ~90,000/s
+	RPC: ~20,000/s
+
+
+
+
+## MQ and RPC at a glance
+
+In the monitor page [http://localhost:15555](http://localhost:15555) , as you can see, there are two sections
 ![Monitor](https://git.oschina.net/uploads/images/2017/0630/162232_543dc692_7458.png "Monitor")
-
-
-### MQ and RPC at a glance
-
-In the monitor page, as you can see, there are two sections
 1. Tracked Servers
 
 	List all the MqServer joined.
