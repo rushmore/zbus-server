@@ -4,9 +4,6 @@
 [submodule "clients/zbus-javascript"]
 	path = clients/zbus-javascript
 	url = https://github.com/rushmore/zbus-javascript
-[submodule "clients/zbus-java"]
-	path = clients/zbus-java
-	url = https://github.com/rushmore/zbus-java
 [submodule "clients/zbus-dotnet"]
 	path = clients/zbus-dotnet
 	url = https://github.com/rushmore/zbus-dotnet
@@ -16,6 +13,6 @@
 [submodule "clients/zbus-cpp"]
 	path = clients/zbus-cpp
 	url = https://github.com/rushmore/zbus-cpp
-[submodule "zbus-cpp"]
-	path = zbus-cpp
-	url = https://github.com/rushmore/zbus-cpp
+[submodule "clients/zbus-go"]
+	path = clients/zbus-go
+	url = https://github.com/rushmore/zbus-go
