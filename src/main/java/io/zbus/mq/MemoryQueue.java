@@ -1,101 +1,141 @@
 package io.zbus.mq;
-
+ 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
+import io.zbus.kit.logging.Logger;
+import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.Protocol.ConsumeGroupInfo;
-import io.zbus.mq.Protocol.TopicInfo;
 import io.zbus.transport.Session;
 
-public class MemoryQueue implements MessageQueue {
-
+public class MemoryQueue extends AbstractQueue { 
+	private static final Logger log = LoggerFactory.getLogger(MemoryQueue.class); 
+	
+	protected Queue<Message> queue = new ConcurrentLinkedQueue<Message>();
+	protected int capacity = 1000; 
+	protected int mask = 0; 
+	protected String creator = "";  
+	protected long createdTime = System.currentTimeMillis();  
+	
+	public MemoryQueue(String topic){
+		super(topic);
+	}
+	
 	@Override
 	public void produce(Message message) throws IOException {
-		// TODO Auto-generated method stub
-
+		queue.offer(message);
+		if(queue.size() > capacity){
+			queue.poll();
+			log.warn("Memory queue full, message discarded");
+		}
+		
+		this.lastUpdatedTime = System.currentTimeMillis(); 
+		dispatch();
 	}
 
 	@Override
-	public Message consume(String consumeGroup, Integer window) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+	public Message consume(String consumeGroup) throws IOException {
+		return queue.poll();
+	} 
+
+	@Override
+	public ConsumeGroupInfo declareGroup(ConsumeGroup ctrl) throws Exception {
+		String consumeGroup = ctrl.getGroupName();
+		if(consumeGroup == null){
+			consumeGroup = this.topic;
+		}
+		
+		MemoryConsumeGroup group = (MemoryConsumeGroup)consumeGroups.get(consumeGroup); 
+		if(group == null){
+			group = new MemoryConsumeGroup(consumeGroup);
+			group.filter = ctrl.getFilter();
+			group.mask = ctrl.getMask();
+			this.consumeGroups.put(consumeGroup, group);
+			log.info("ConsumeGroup created: %s", group); 
+		}
+		return group.getConsumeGroupInfo();
+	}
+	  
+	@Override
+	public long createdTime() { 
+		return createdTime;
+	}
+	
+	@Override
+	public long messageDepth() { 
+		return queue.size();
+	} 
+	 
+	@Override
+	public String getCreator() { 
+		return creator;
 	}
 
 	@Override
-	public void consume(Message message, Session session) throws IOException {
-		// TODO Auto-generated method stub
-
+	public void setCreator(String value) { 
+		this.creator = value;
 	}
 
 	@Override
-	public ConsumeGroupInfo declareGroup(ConsumeGroup consumeGroup) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+	public int getMask() { 
+		return mask;
 	}
 
 	@Override
-	public void removeGroup(String groupName) throws IOException {
-		// TODO Auto-generated method stub
-
+	public void setMask(int value) { 
+		mask = value;
 	}
+	 
 
-	@Override
-	public void removeTopic() throws IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public int consumerCount(String consumeGroup) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public void cleanSession(Session sess) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public String getTopic() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public TopicInfo getInfo() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public long getUpdateTime() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public String getCreator() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public void setCreator(String value) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public int getMask() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public void setMask(int value) {
-		// TODO Auto-generated method stub
-
-	}
-
+    class MemoryConsumeGroup extends AbstractConsumeGroup {   
+		private String filter;
+		private Integer mask;
+		private long createdTime = System.currentTimeMillis();
+		private long updatedTime = System.currentTimeMillis();
+		
+		public MemoryConsumeGroup(String groupName) throws IOException {
+			super(groupName);
+		} 
+		
+		public void removeSession(Session session){
+			pullSessions.remove(session.id());
+			Iterator<PullSession> iter = pullQ.iterator();
+			while(iter.hasNext()){
+				if(iter.next().session == session){
+					iter.remove();
+					break;
+				}
+			}
+		}
+		
+		@Override
+		public Message read() throws IOException { 
+			return queue.poll();
+		} 
+		
+		public boolean isEnd(){
+			return queue.size() == 0;
+		}
+		 
+		public ConsumeGroupInfo getConsumeGroupInfo(){
+			ConsumeGroupInfo info = new ConsumeGroupInfo(); 
+			info.topicName = topic;
+			info.filter = filter;
+			info.creator = null;
+			info.mask = mask == null? 0 : mask;
+			info.createdTime = createdTime;
+			info.lastUpdatedTime = updatedTime;
+			info.consumerCount = pullSessions.size();
+			info.messageCount = queue.size();
+			info.groupName = groupName;
+			info.consumerList = new ArrayList<String>();
+			for(Session session : pullSessions.values()){
+				info.consumerList.add(session.remoteAddress());
+			}
+			return info;
+		}
+	} 
 }

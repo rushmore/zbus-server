@@ -28,6 +28,7 @@ public class RpcProcessor implements MessageHandler{
 	 
 	public void addModule(Object... services){
 		for(Object obj : services){
+			if(obj == null) continue;
 			for(Class<?> intf : getAllInterfaces(obj.getClass())){
 				addModule(intf.getSimpleName(), obj);
 				addModule(intf.getName(), obj);
@@ -42,6 +43,32 @@ public class RpcProcessor implements MessageHandler{
 		for(Object service: services){
 			this.initCommandTable(module, service);
 		}
+	} 
+	
+	public void addModule(Class<?>... clazz){
+		Object[] services = new Object[clazz.length];
+		for(int i=0;i<clazz.length;i++){
+			Class<?> c = clazz[i];
+			try {
+				services[i] = c.newInstance();
+			} catch (Exception e) {
+				log.error(e.getMessage(), e);
+			} 
+		} 
+		addModule(services);
+	}
+	
+	public void addModule(String module, Class<?>... clazz){
+		Object[] services = new Object[clazz.length];
+		for(int i=0;i<clazz.length;i++){
+			Class<?> c = clazz[i];
+			try {
+				services[i] = c.newInstance();
+			} catch (Exception e) {
+				log.error(e.getMessage(), e);
+			} 
+		} 
+		addModule(module, services);
 	} 
 	
 	public void removeModule(Object... services){
@@ -89,6 +116,7 @@ public class RpcProcessor implements MessageHandler{
 		List<RpcMethod> rpcMethods = new ArrayList<RpcMethod>();
 		object2Methods.put(serviceKey,rpcMethods);
 		for (Method m : methods) { 
+			if(m.getDeclaringClass() == Object.class) continue;
 			String method = m.getName();
 			Remote cmd = m.getAnnotation(Remote.class);
 			if(cmd != null){ 
@@ -244,7 +272,7 @@ public class RpcProcessor implements MessageHandler{
 	
 	@Override
 	public void handle(Message msg, MqClient client) throws IOException {
-		final String mq = msg.getTopic();
+		final String topic = msg.getTopic();
 		final String msgId  = msg.getId();
 		final String sender = msg.getSender();
 		 
@@ -252,7 +280,7 @@ public class RpcProcessor implements MessageHandler{
 		
 		if(res != null){
 			res.setId(msgId);
-			res.setTopic(mq);  
+			res.setTopic(topic);  
 			res.setReceiver(sender);  
 			//route back message
 			client.route(res);

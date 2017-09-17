@@ -234,6 +234,22 @@ public class RpcInvoker {
 		}   
 	} 
 	
+	@SuppressWarnings("unchecked")
+	public static <T> T createProxy(Class<T> clazz, RpcConfig config){  
+		Constructor<RpcInvocationHandler> rpcInvokerCtor;
+		try {
+			rpcInvokerCtor = RpcInvocationHandler.class.getConstructor(new Class[] {RpcInvoker.class });
+			RpcInvoker rpcInvoker = new RpcInvoker(config);
+			rpcInvoker.module = clazz.getName();
+			RpcInvocationHandler rpcInvokerHandler = rpcInvokerCtor.newInstance(rpcInvoker); 
+			Class<T>[] interfaces = new Class[] { clazz }; 
+			ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+			return (T) Proxy.newProxyInstance(classLoader, interfaces, rpcInvokerHandler);
+		} catch (Exception e) { 
+			throw new RpcException(e);
+		}   
+	} 
+	
 	public static class RpcInvocationHandler implements InvocationHandler {  
 		private RpcInvoker rpc; 
 		private static final Object REMOTE_METHOD_CALL = new Object();

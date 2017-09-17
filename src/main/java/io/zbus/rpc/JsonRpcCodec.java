@@ -27,6 +27,7 @@ import java.util.Map;
 
 import io.zbus.kit.JsonKit;
 import io.zbus.mq.Message;
+import io.zbus.mq.server.Fix;
  
 
 public class JsonRpcCodec implements RpcCodec {  
@@ -36,7 +37,11 @@ public class JsonRpcCodec implements RpcCodec {
 		Message msg = new Message();  
 		if(encoding == null) encoding = DEFAULT_ENCODING;  
 		msg.setEncoding(encoding);
-		msg.setBody(JsonKit.toJSONBytesWithType(request, encoding));
+		if(Fix.Enabled){ //zbus7 package name conflicts if type enabled
+			msg.setBody(JsonKit.toJSONBytes(request, encoding));
+		} else {
+			msg.setBody(JsonKit.toJSONBytesWithType(request, encoding));
+		} 
 		return msg;
 	}
 	
@@ -57,7 +62,13 @@ public class JsonRpcCodec implements RpcCodec {
 		msg.setStatus(200);
 		msg.setEncoding(encoding); 
 		if(encoding == null) encoding = DEFAULT_ENCODING;  
-		msg.setBody(JsonKit.toJSONBytesWithType(response, encoding)); 
+		String json;
+		if(response.getError() != null){
+			json = String.format("{\"error\": %s}", JsonKit.toJSONStringWithTykpe(response.getError(), encoding));
+		} else {
+			json = String.format("{\"result\": %s}", JsonKit.toJSONStringWithTykpe(response.getResult(), encoding));
+		} 
+		msg.setBody(json); 
 		return msg; 
 	}
 	

@@ -19,7 +19,7 @@ public class Consumer extends MqAdmin implements Closeable {
 	private static final Logger log = LoggerFactory.getLogger(Consumer.class);  
 	private ServerSelector consumeServerSelector; 
 	
-	protected String topic;
+	protected String topic; 
 	protected ConsumeGroup consumeGroup; 
 	protected Integer consumeWindow; 
 	protected int consumeTimeout; 
@@ -28,7 +28,7 @@ public class Consumer extends MqAdmin implements Closeable {
 	private MessageHandler messageHandler;
 	private int connectionCount;
 	private int consumeRunnerPoolSize; 
-	private int maxInFlightMessage;  
+	private int maxInFlightMessage;   
 	
 	private boolean started;
 	
@@ -37,8 +37,16 @@ public class Consumer extends MqAdmin implements Closeable {
 	public Consumer(ConsumerConfig config) {
 		super(config); 
 		
-		this.topic = config.getTopic();
+		this.topic = config.getTopic(); 
 		this.consumeGroup = config.getConsumeGroup();
+		if(this.consumeGroup == null){
+			this.consumeGroup = new ConsumeGroup();
+			this.consumeGroup.setGroupName(this.topic);
+		}
+		
+		if(this.consumeGroup.getMask() == null){ //TODO
+			this.consumeGroup.setMask(config.getTopicMask());
+		}
 		this.consumeWindow = config.getConsumeWindow();
 		this.consumeTimeout = config.getConsumeTimeout();
 		
@@ -52,8 +60,12 @@ public class Consumer extends MqAdmin implements Closeable {
 			this.consumeServerSelector = new DefaultConsumeServerSelector();
 		}
 	} 
+	
+	public synchronized void start() throws IOException{
+		start(false);
+	}
 
-	public synchronized void start() throws IOException{  
+	public synchronized void start(final boolean pauseOnStart) throws IOException{  
 		if(started) return;
 		
 		if(this.messageHandler == null){
@@ -70,7 +82,7 @@ public class Consumer extends MqAdmin implements Closeable {
 		MqClientPool[] pools = broker.selectClient(consumeServerSelector, msg); 
 		
 		for(MqClientPool pool : pools){
-			startConsumeThreadGroup(pool);
+			startConsumeThreadGroup(pool, pauseOnStart);
 		}
 		
 		broker.addServerNotifyListener(new ServerNotifyListener() { 
@@ -88,20 +100,32 @@ public class Consumer extends MqAdmin implements Closeable {
 			} 
 			@Override
 			public void onServerJoin(MqClientPool pool) { 
-				startConsumeThreadGroup(pool);
+				startConsumeThreadGroup(pool, pauseOnStart);
 			}
 		});
 		
 		started = true;
 	} 
 	
-	private void startConsumeThreadGroup(MqClientPool pool){
+	public void pause(){
+		for(ConsumeThreadGroup consumerThreadGroup : consumeThreadGroupMap.values()){
+			consumerThreadGroup.pause();
+		}
+	}
+	
+	public void resume(){
+		for(ConsumeThreadGroup consumerThreadGroup : consumeThreadGroupMap.values()){
+			consumerThreadGroup.resume();
+		}
+	}
+	 
+	private void startConsumeThreadGroup(MqClientPool pool, boolean pasuseOnStart){
 		if(consumeThreadGroupMap.containsKey(pool.serverAddress())){
 			return;
 		}
 		ConsumeThreadGroup group = new ConsumeThreadGroup(pool);
 		consumeThreadGroupMap.put(pool.serverAddress(), group);
-		group.start(); 
+		group.start(pasuseOnStart); 
 	}
 	
 	public void start(MessageHandler consumerHandler) throws IOException{
@@ -134,22 +158,32 @@ public class Consumer extends MqAdmin implements Closeable {
 			threads = new ConsumeThread[connectionCount];
 			for(int i=0;i<connectionCount;i++){
 				MqClient clieint = pool.createClient();
-				ConsumeThread thread = threads[i] = new ConsumeThread(clieint);
-				thread.setConsumeHandler(messageHandler); 
-				
-				thread.setTopic(topic);
-				thread.setConsumeGroup(consumeGroup);
-
-				thread.setToken(token);
-				
+				ConsumeThread thread = threads[i] = new ConsumeThread(clieint); 
+				thread.setTopic(topic); 
+				thread.setConsumeGroup(consumeGroup); 
+				thread.setToken(token); 
 				thread.setConsumeRunner(consumeRunner); 
 				thread.setConsumeTimeout(consumeTimeout);
+				
+				thread.setMessageHandler(messageHandler); 
+			}
+		} 
+		
+		public void start(boolean pauseOnStart){
+			for(ConsumeThread thread : threads){
+				thread.start(pauseOnStart);
 			}
 		}
 		
-		public void start(){
-			for(Thread thread : threads){
-				thread.start();
+		public void pause(){
+			for(ConsumeThread thread : threads){
+				thread.pause();
+			}
+		}
+		
+		public void resume(){
+			for(ConsumeThread thread : threads){
+				thread.resume();
 			}
 		}
 		
@@ -159,8 +193,7 @@ public class Consumer extends MqAdmin implements Closeable {
 				thread.getClient().close();
 			}
 		} 
-	}
-
+	} 
 
 	public ServerSelector getConsumeServerSelector() {
 		return consumeServerSelector;

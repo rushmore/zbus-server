@@ -8,6 +8,7 @@ public class MqConfig implements Cloneable {
 	 
 	protected String token;   
 	protected int invokeTimeout = 10000;  // 10 s 
+	protected Integer topicMask;
 	
 	protected boolean verbose = false; 
 	
@@ -49,8 +50,16 @@ public class MqConfig implements Cloneable {
 
 	public void setInvokeTimeout(int invokeTimeout) {
 		this.invokeTimeout = invokeTimeout;
-	} 
+	}  
 	
+	public Integer getTopicMask() {
+		return topicMask;
+	}
+
+	public void setTopicMask(Integer topicMask) {
+		this.topicMask = topicMask;
+	}
+
 	public ServerSelector getAdminServerSelector() {
 		return adminServerSelector;
 	}

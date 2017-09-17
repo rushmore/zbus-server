@@ -1,65 +1,65 @@
-function Protocol() { }
-
-Protocol.VERSION_VALUE = "0.8.0";       //start from 0.8.0 
-
-/////////////////////////Command Values/////////////////////////
+class Protocol{ }
 //!!!Javascript message control: xxx_yyy = xxx-yyy (underscore equals dash), both support
 //MQ Produce/Consume
 Protocol.PRODUCE = "produce";
 Protocol.CONSUME = "consume";
-Protocol.RPC = "rpc";
-Protocol.ROUTE = "route";     //route back message to sender, designed for RPC
+Protocol.UNCONSUME = "unconsume";
+Protocol.RPC     = "rpc";
+Protocol.ROUTE   = "route";     //route back message to sender, designed for RPC
+
+Protocol.SSL = "ssl";
 
 //Topic/ConsumeGroup control
 Protocol.DECLARE = "declare";
-Protocol.QUERY = "query";
-Protocol.REMOVE = "remove";
-Protocol.EMPTY = "empty";
+Protocol.QUERY   = "query";
+Protocol.REMOVE  = "remove";
+Protocol.EMPTY   = "empty";
 
 //Tracker
+Protocol.TRACKER   = "tracker";
 Protocol.TRACK_PUB = "track_pub";
 Protocol.TRACK_SUB = "track_sub";
 
-Protocol.COMMAND = "cmd";
-Protocol.TOPIC = "topic";
+Protocol.COMMAND    = "cmd";
+Protocol.TOPIC      = "topic";
 Protocol.TOPIC_MASK = "topic_mask";
-Protocol.TAG = "tag";
-Protocol.OFFSET = "offset";
+Protocol.TAG        = "tag";
+Protocol.OFFSET     = "offset";
 
-Protocol.CONSUME_GROUP = "consume_group";
-Protocol.GROUP_START_COPY = "group_start_copy";
+Protocol.CONSUME_GROUP      = "consume_group";
+Protocol.GROUP_FILTER       = "group_filter";
+Protocol.GROUP_MASK         = "group_mask";
+Protocol.GROUP_START_COPY   = "group_start_copy";
 Protocol.GROUP_START_OFFSET = "group_start_offset";
-Protocol.GROUP_START_MSGID = "group_start_msgid";
-Protocol.GROUP_START_TIME = "group_start_time";
-Protocol.GROUP_WINDOW = "consume_window";
-Protocol.GROUP_FILTER_TAG = "group_filter";
-Protocol.GROUP_MASK = "group_mask";
+Protocol.GROUP_START_MSGID  = "group_start_msgid";
+Protocol.GROUP_START_TIME   = "group_start_time";
+
+Protocol.WINDOW = "window";
 
 Protocol.SENDER = "sender";
 Protocol.RECVER = "recver";
-Protocol.ID = "id";
+Protocol.ID     = "id";
 
-Protocol.SERVER = "server";
-Protocol.ACK = "ack";
+Protocol.ACK      = "ack";
 Protocol.ENCODING = "encoding";
 
-Protocol.ORIGIN_ID = "origin_id";     //original id, TODO compatible issue: rawid
-Protocol.ORIGIN_URL = "origin_url";    //original URL  
-Protocol.ORIGIN_STATUS = "origin_status"; //original Status  TODO compatible issue: reply_code
+Protocol.ORIGIN_ID     = "origin_id";    
+Protocol.ORIGIN_URL    = "origin_url";    
+Protocol.ORIGIN_STATUS = "origin_status";  
 
 //Security 
-Protocol.TOKEN = "token";
+Protocol.TOKEN = "token"; 
 
+Protocol.HEARTBEAT = 'heartbeat'; 
 
-/////////////////////////Flag values/////////////////////////	
-Protocol.MASK_PAUSE = 1 << 0;
-Protocol.MASK_RPC = 1 << 1;
-Protocol.MASK_EXCLUSIVE = 1 << 2;
-Protocol.MASK_DELETE_ON_EXIT = 1 << 3;
-
+Protocol.MASK_MEMORY    	 = 1<<0;
+Protocol.MASK_RPC    	     = 1<<1;
+Protocol.MASK_PROXY    	     = 1<<2; 
+Protocol.MASK_PAUSE    	     = 1<<3;  
+Protocol.MASK_EXCLUSIVE 	 = 1<<4;  
+Protocol.MASK_DELETE_ON_EXIT = 1<<5; 
 
 ////////////////////////////////////////////////////////////
-
 function hashSize(obj) {
     var size = 0, key;
     for (key in obj) {
@@ -67,10 +67,12 @@ function hashSize(obj) {
     }
     return size;
 }
+
 function randomKey (obj) {
     var keys = Object.keys(obj)
     return keys[keys.length * Math.random() << 0];
-};
+}
+
 function clone(obj) {
     if (null == obj || "object" != typeof obj) return obj;
     var copy = obj.constructor();
@@ -95,7 +97,7 @@ String.prototype.format = function () {
     });
 }
 
-Date.prototype.format = function (fmt) { //author: meizz 
+Date.prototype.format = function (fmt) {
     var o = {
         "M+": this.getMonth() + 1,
         "d+": this.getDate(),
@@ -136,7 +138,97 @@ var HttpStatus = {
     500: "Internal Server Error"
 };
 
+function asleep(ms){
+    return new Promise(resolve=>{
+        setTimeout(resolve, ms);
+    });
+}
+/////////////////////////logging////////////////////////////
 
+class Logger { 
+  constructor(level){
+    this.level = level;
+    if(!level){
+      this.level = Logger.DEBUG;
+    }
+
+    this.DEBUG = 0;
+    this.INFO = 1;
+    this.WARN = 2;
+    this.ERROR = 3;  
+  } 
+
+  debug() { this._log(this.DEBUG, ...arguments); } 
+  info() { this._log(this.INFO, ...arguments); } 
+  warn() { this._log(this.WARN, ...arguments); } 
+  error() { this._log(this.ERROR, ...arguments); } 
+  
+  log(level) { this._log(level, ...Array.prototype.slice.call(arguments, 1)); } 
+
+  _log(level) {
+    if(level<this.level) return;
+    var args = Array.prototype.slice.call(arguments, 1);
+    var levelString = "UNKNOWN";
+    if(level == this.DEBUG){
+        levelString = "DEBUG";
+    } 
+    if(level == this.INFO){
+        levelString = "INFO";
+    }
+    if(level == this.WARN){
+        levelString = "WARN";
+    }
+    if(level == this.ERROR){
+        levelString = "ERROR";
+    } 
+    args.splice(0, 0, "["+levelString+"]");
+    console.log(new Date().format("yyyy/MM/dd hh:mm:ss.S"), ...this._format(args));
+  }
+
+  _format(args) {
+    args = Array.prototype.slice.call(args) 
+    var stackInfo = this._getStackInfo(2) //info => _log => _format  back 2
+
+    if (stackInfo) { 
+      var calleeStr = stackInfo.relativePath + ':' + stackInfo.line;
+      if (typeof (args[0]) === 'string') {
+        args[0] = calleeStr + ' ' + args[0]
+      } else {
+        args.unshift(calleeStr)
+      }
+    } 
+    return args
+  }
+
+  _getStackInfo(stackIndex) { 
+    // get all file, method, and line numbers
+    var stacklist = (new Error()).stack.split('\n').slice(3)
+
+    // stack trace format: http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+    // do not remove the regex expresses to outside of this method (due to a BUG in node.js)
+    var stackReg = /at\s+(.*)\s+\((.*):(\d*):(\d*)\)/gi
+    var stackReg2 = /at\s+()(.*):(\d*):(\d*)/gi
+
+    var s = stacklist[stackIndex] || stacklist[0]
+    var sp = stackReg.exec(s) || stackReg2.exec(s)
+
+    if (sp && sp.length === 5) {
+      return {
+        method: sp[1],
+        relativePath: sp[2].replace(/^.*[\\\/]/, ''),
+        line: sp[3],
+        pos: sp[4],
+        file: sp[2],
+        stack: stacklist.join('\n')
+      }
+    }
+  }
+}
+
+ 
+var logger = new Logger(Logger.INFO);  //should export
+
+//////////////////////////////////////////////////////////// 
 var __NODEJS__ = typeof module !== 'undefined' && module.exports;
 
 if (__NODEJS__) {
@@ -350,16 +442,7 @@ function httpDecode(data) {
 
     return msg;
 }
-
-
-function Ticket(reqMsg, callback) {
-    this.id = uuid();
-    this.request = reqMsg;
-    this.response = null;
-    this.callback = callback;
-    reqMsg.id = this.id;
-} 
-
+ 
 function addressKey(serverAddress) {
     var scheme = ""
     if (serverAddress.sslEnabled) {
@@ -368,28 +451,56 @@ function addressKey(serverAddress) {
     return scheme + serverAddress.address;
 }
 
-function normalizeAddress(serverAddress, certFile) {
-    if (typeof (serverAddress) == 'string') {
-        var sslEnabled = false;
-        if (certFile) sslEnabled = true;
+class ServerAddress {
+    constructor(serverAddress, sslEnabled, certificate, token){
+        if(typeof(serverAddress) == 'string'){
+            serverAddress = serverAddress.trim();
+            if (serverAddress.startsWith("ws://")) {
+                serverAddress = serverAddress.substring(5);
+                sslEnabled = false;
+            }
+            if (serverAddress.startsWith("wss://")) {
+                serverAddress = serverAddress.substring(6);
+                sslEnabled = true;
+            }
 
-        serverAddress = serverAddress.trim();
-        if (serverAddress.startsWith("ws://")) {
-            serverAddress = serverAddress.substring(5);
-        }
-        if (serverAddress.startsWith("wss://")) {
-            serverAddress = serverAddress.substring(6);
-            sslEnabled = true;
-        }
+            this.address = serverAddress;
+            this.sslEnabled = sslEnabled;
+            this.certificate = certificate;
+            this.token = token;
+            return;
+        }  
 
-        serverAddress = {
-            address: serverAddress,
-            sslEnabled: sslEnabled,
-        }; 
+        this.address = serverAddress.address;
+        this.sslEnabled = serverAddress.sslEnabled || sslEnabled==true;
+        this.certificate = serverAddress.certificate || certificate;
+        this.token = serverAddress.token || token;  
     }
-    return serverAddress; 
-}
 
+    setCertFile(certFile) {
+        if(!__NODEJS__) return; 
+        this.certificate = fs.readFileSync(certFile);
+    }
+
+    string () {
+        var scheme = ""
+        if (this.sslEnabled) {
+            scheme = "[SSL]"
+        }
+        return scheme + this.address;
+    }
+
+    in (serverAddressArray) {
+        for (var i in serverAddressArray) {
+            var addr = serverAddressArray[i];
+            if (addr.address == this.address && addr.sslEnabled == this.sslEnabled) {
+                return true;
+            }
+        }
+        return false;
+    } 
+}
+ 
 function containsAddress(serverAddressArray, serverAddress) {
     for (var i in serverAddressArray) {
         var addr = serverAddressArray[i];
@@ -398,18 +509,14 @@ function containsAddress(serverAddressArray, serverAddress) {
         }
     }
     return false;
-}
+} 
 
-
-
- 
-function MessageClient(serverAddress, certFile) { 
+function MqClient(serverAddress) { 
     if (__NODEJS__) {
         Events.EventEmitter.call(this);
     }
-    serverAddress = normalizeAddress(serverAddress, certFile);
-    this.serverAddress = serverAddress;
-    this.certFile = certFile;
+    serverAddress = new ServerAddress(serverAddress); 
+    this.serverAddress = serverAddress; 
 
     var address = this.serverAddress.address;
     var p = address.indexOf(':');
@@ -423,43 +530,62 @@ function MessageClient(serverAddress, certFile) {
 
     this.autoReconnect = true;
     this.reconnectInterval = 3000;
+    this.heartbeatInterval = 60*1000; //60 seconds
     this.ticketTable = {};
     this.onMessage = null;
     this.onConnected = null;
-    this.onDisconnected = null; 
+    this.onDisconnected = null;  
 
     this.readBuf = new Uint8Array(0); //only used when NODEJS 
 } 
 
 if (__NODEJS__) {
 	
-inherits(MessageClient, Events.EventEmitter);
+inherits(MqClient, Events.EventEmitter); 
 
-MessageClient.prototype.connect = function (connectedHandler) { 
-    console.log("Trying to connect: " + this.serverHost + ":" + this.serverPort);
-    var certFile = this.certFile;
-    if(this.serverAddress.sslEnabled) { 
-        console.log("cert:" + this.certFile);
-        this.socket = tls.connect(this.serverPort, {  
-            cert: fs.readFileSync(certFile),  
-            ca: fs.readFileSync(certFile),
-        });
-    } else {
-        this.socket = Socket.connect({ host: this.serverHost, port: this.serverPort }); 
-    } 
+MqClient.prototype.connect = function (connectedHandler) { 
+    if(this.socket && this.connectPromise) {
+        return this.connectPromise;
+    }
+    this.onConnected = connectedHandler;
+    //should handle failure 
+    var connectSuccess;
+    var connectFailure;
+    this.connectPromise = new Promise((resolve, reject) => {
+        connectSuccess = resolve;
+        connectFailure = reject;
+    }); 
+
+    try {
+        logger.debug("Trying to connect: " + this.serverHost + ":" + this.serverPort); 
+        if(this.serverAddress.sslEnabled) {  
+            this.socket = tls.connect(this.serverPort, {  
+                cert: this.serverAddress.certificate,  
+                ca: this.serverAddress.certificate,
+            });
+        } else {
+            this.socket = Socket.connect({ host: this.serverHost, port: this.serverPort }); 
+        }  
+    } catch (e){
+        connectFailure(e);
+        return this.connectPromise;
+    }
+    
 
     var client = this;
     this.socket.on("connect", function () {
-        console.log("MessageClient connected: " + client.serverHost + ":" + client.serverPort);
-        if (connectedHandler) {
-            connectedHandler();
+        logger.debug("MqClient connected: " + client.serverHost + ":" + client.serverPort);
+        if (connectSuccess) {
+            connectSuccess();
+        }
+        if(client.onConnected){
+            client.onConnected(client);
         }
        
-        client.heartbeatInterval = setInterval(function () {
-            var msg = {};
-            msg.cmd = 'heartbeat';
-            client.invoke(msg);
-        }, 300 * 1000);
+        client.heartbeat = setInterval(function () { 
+            var msg = {cmd: Protocol.HEARTBEAT};
+            try{ client.send(msg); }catch(e){ logger.warn(e); }
+        }, client.heartbeatInterval);
     }); 
 
     this.socket.on("error", function (error) {
@@ -467,24 +593,27 @@ MessageClient.prototype.connect = function (connectedHandler) {
     });
 
     this.socket.on("close", function () {
+        this.connectPromise = null;
         client.socket.destroy();
-        clearInterval(client.heartbeatInterval);
+        client.socket = null;
+        clearInterval(client.heartbeat);
+        client.removeAllListeners();
 
         if (client.onDisconnected) {
-            client.onDisconnected();
-            return;
+            client.onDisconnected(); 
         }  
 
         if (client.autoReconnect) {
-            console.log("Trying to recconnect: " + client.serverHost + ":" + client.serverPort);
-            setTimeout(function () {
+            logger.debug("Trying to recconnect: " + client.serverHost + ":" + client.serverPort); 
+            
+            client.connectTrying = setTimeout(function () {
                 client.connect(connectedHandler);
             }, client.reconnectInterval);
         }
     });
 
-    client.on("error", function (error) {
-        console.log(error);
+    client.on("error", function (error) {  
+        logger.error(error); 
     });
 
     this.socket.on("data", function (data) { 
@@ -517,44 +646,56 @@ MessageClient.prototype.connect = function (connectedHandler) {
             if (msg == null) break;
             var msgid = msg.id;
             var ticket = client.ticketTable[msgid];
-            if (ticket) {
+            if (ticket) { 
                 ticket.response = msg;
-                if (ticket.callback) {
-                    ticket.callback(msg);
-                }
-                delete client.ticketTable[msgid];
+                if(ticket.resolve){
+                    ticket.resolve(msg);
+                    delete client.ticketTable[msgid];
+                } 
             } else if (client.onMessage) {
                 client.onMessage(msg);
             }
         } 
     });
-};
 
-MessageClient.prototype.invoke = function (msg, callback) {
-    if (callback) {
-        var ticket = new Ticket(msg, callback);
-        this.ticketTable[ticket.id] = ticket;
-    }
+    return this.connectPromise;
+}; 
+
+MqClient.prototype.active = function () {
+     return this.socket && !this.socket.destroyed;
+}
+
+MqClient.prototype.send = function (msg) {
     var buf = httpEncode(msg); 
     this.socket.write(Buffer.from(buf));
-};
+}
 
-MessageClient.prototype.close = function () {
-    if (this.socket.destroyed) return;
-    clearInterval(this.heartbeatInterval);
+
+MqClient.prototype.close = function () {
+    this.connectPromise = null;
+    if (!this.socket) return;
+    clearInterval(this.heartbeat);
+    if(this.connectTrying){
+        clearTimeout(this.connectTrying);
+    } 
     this.socket.removeAllListeners("close");
     this.autoReconnect = false;
     this.socket.destroy();
+    this.socket = null;
 } 
 
 } else { 
 //WebSocket
 	
-MessageClient.prototype.connect = function (connectedHandler) {
-    console.log("Trying to connect to " + this.address());
-    if (!connectedHandler) {
-        connectedHandler = this.onConnected;
-    }
+MqClient.prototype.connect = function (connectedHandler) {
+    logger.debug("Trying to connect to " + this.address()); 
+    this.onConnected = connectedHandler; 
+
+    //should handle failure 
+    var connectSuccess;
+    this.connectPromise = new Promise(resolve => {
+        connectSuccess = resolve;
+    });
 
     var WebSocket = window.WebSocket;
     if (!WebSocket) {
@@ -565,24 +706,28 @@ MessageClient.prototype.connect = function (connectedHandler) {
     this.socket.binaryType = 'arraybuffer';
     var client = this;
     this.socket.onopen = function (event) {
-        console.log("Connected to " + client.address());
-        if (connectedHandler) {
-            connectedHandler(event);
+        logger.debug("Connected to " + client.address());
+        if (connectSuccess) {
+            connectSuccess();
         }
-        client.heartbeatInterval = setInterval(function () {
-            var msg = {};
-            msg.cmd = "heartbeat";
-            client.invoke(msg);
-        }, 30 * 1000);
+        if(client.onConnected){
+            client.onConnected(client);
+        }
+
+        client.heartbeat = setInterval(function () {
+            var msg = {cmd: Protocol.HEARTBEAT};
+            try{ client.send(msg); }catch(e){ logger.warn(e); }
+        }, client.heartbeatInterval);
     };
 
     this.socket.onclose = function (event) {
-        clearInterval(client.heartbeatInterval);
+        this.connectPromise = null;
+        clearInterval(client.heartbeat);
         if (client.onDisconnected) {
             client.onDisconnected(); 
         }
         if (client.autoReconnect) {
-            setTimeout(function () {
+            client.connectTrying = setTimeout(function () {
                 try { client.connect(connectedHandler); } catch (e) { }//ignore
             }, client.reconnectInterval);
         }
@@ -594,41 +739,43 @@ MessageClient.prototype.connect = function (connectedHandler) {
         var ticket = client.ticketTable[msgid];
         if (ticket) {
             ticket.response = msg;
-            if (ticket.callback) {
-                ticket.callback(msg);
-            }
-            delete client.ticketTable[msgid];
+            if(ticket.resolve){
+                ticket.resolve(msg);
+                delete client.ticketTable[msgid];
+            } 
         } else if (client.onMessage) {
             client.onMessage(msg);
         }  
     }
 
     this.socket.onerror = function (data) {
-        console.log("Error: " + data);
+        logger.error("Error: " + data); 
     }
+    return this.connectPromise;
 }
 
-MessageClient.prototype.invoke = function (msg, callback) {
-    if (!this.socket || this.socket.readyState != WebSocket.OPEN) {
-        throw "socket is not open, invalid"; 
-    }
-    if (callback) {
-        var ticket = new Ticket(msg, callback);
-        this.ticketTable[ticket.id] = ticket;
-    }
+MqClient.prototype.active = function () {
+     return this.socket && this.socket.readyState == WebSocket.OPEN;
+}
 
+MqClient.prototype.send = function (msg) {
     var buf = httpEncode(msg);
     this.socket.send(buf);
-};
+}
 
-MessageClient.prototype.close = function () {
-    clearInterval(this.heartbeatInterval);
+MqClient.prototype.close = function () {
+    this.connectPromise = null;
+    clearInterval(this.heartbeat);
+    if(this.connectTrying){
+        clearTimeout(this.connectTrying);
+    } 
     this.socket.onclose = function () { }
     this.autoReconnect = false;
     this.socket.close();
+    this.socket = null;
 }
 
-MessageClient.prototype.address = function () {
+MqClient.prototype.address = function () {
     if (this.serverAddress.sslEnabled) {
         return "wss://" + this.serverAddress.address;
     }
@@ -637,687 +784,899 @@ MessageClient.prototype.address = function () {
  
 }//End of __NODEJS___
 
-
-
-MessageClient.prototype.sendMessage = function (msg) {
-    this.invoke(msg);
+///////////////////////////////commons for Node.JS and Browser///////////////////////////////////
+ 
+MqClient.prototype.fork = function () {
+    return new MqClient(this.serverAddress);
 } 
 
-function MqClient(serverAddress, certFile) {
-    MessageClient.call(this, serverAddress, certFile);
-    this.token = null;
-}
-inherits(MqClient, MessageClient) 
+function Ticket(reqMsg, resolve) {
+    this.id = uuid();
+    reqMsg.id = this.id; 
+    this.request = reqMsg;
+    this.response = null;
+    
+    this.resolve = resolve;  
+} 
 
-MqClient.prototype.fork = function () {
-    return new MqClient(this.serverAddress, this.certFile);
-}
+MqClient.prototype.invoke = function (msg) {
+    var client = this;
+    var ticket = new Ticket(msg); 
+    this.ticketTable[ticket.id] = ticket;
 
-MqClient.prototype._invoke = function (cmd, msg, callback) {
+    var promise = new Promise((resolve, reject)=>{
+        if (!client.active()) {
+            reject(new Error("socket is not open, invalid"));
+            return;
+        }  
+        ticket.resolve = resolve;
+        if(ticket.response){ 
+            ticket.resolve(ticket.reponse);
+            delete this.ticketTable[ticket.id];
+        } 
+    });   
+    
+    this.send(msg); 
+    return promise;
+};
+
+MqClient.prototype.invokeCmd = function (cmd, msg) {
     if (typeof (msg) == 'string') msg = { topic: msg };  //assume to be topic
     if (!msg) msg = {};
 
-    if (this.token) msg.token = this.token;
+    if (this.token && !msg.token) msg.token = this.token;
     msg.cmd = cmd; 
-    this.invoke(msg, callback);
-}
- 
-MqClient.prototype.query = function (msg, callback) { 
-    this._invoke(Protocol.QUERY, msg, callback);
-}
-MqClient.prototype.declare = function (msg, callback) {
-    this._invoke(Protocol.DECLARE, msg, callback);
-} 
-MqClient.prototype.remove = function (msg, callback) {
-    this._invoke(Protocol.REMOVE, msg, callback);
-}
-MqClient.prototype.empty = function (msg, callback) {
-    this._invoke(Protocol.EMPTY, msg, callback);
+    return this.invoke(msg);
 }
 
-MqClient.prototype.produce = function (msg, callback) {
-    this._invoke(Protocol.PRODUCE, msg, callback); 
+MqClient.prototype.invokeObject = function (cmd, msg) {
+    return this.invokeCmd(cmd, msg)
+    .then((res)=>{ 
+        if(res.status != 200){
+            var error = new Error(res.body);
+            error.msg = res;
+            return {error: error};
+        }
+        return res.body;
+    });
 }
+  
+  
+MqClient.prototype.route = function (msg) {
+    if (this.token && !msg.token) msg.token = this.token;
 
-MqClient.prototype.consume = function (msg, callback) { 
-    this._invoke(Protocol.CONSUME, msg, callback);
-}
-MqClient.prototype.route = function (msg, callback) {
     msg.ack = false;
+    msg.cmd = Protocol.ROUTE; 
     if (msg.status) {
         msg.originStatus = msg.status;
         delete msg.status;
     }
-    this._invoke(Protocol.ROUTE, msg, callback);
+    this.send(msg);
 }
 
-
-
-function BrokerRouteTable() {
-    this.serverTable = {};  //{ ServerAddress => ServerInfo }
-    this.topicTable = {};   //{ TopicName=>{ ServerAddres=>TopicInfo } }
-    this.votesTable = {};   //{ TrackerAddress => { servers: Set[ServerAddress], version: xxx, tracker: ServerAddress } }
-    this.voteFactor = 0.5;  //for a serverInfo, how much percent of trackers should have voted
-}
-
-
-BrokerRouteTable.prototype.updateTracker = function (trackerInfo) {
-    var toRemove = [];
-    //1) Update VotesTable
-    var trackedServerList = [];
-    for(var serverAddr in trackerInfo.serverTable){
-    	var serverInfo = trackerInfo.serverTable[serverAddr];
-    	trackedServerList.push(serverInfo.serverAddress);
+MqClient.prototype.ssl = function (msg) { 
+    if(msg.constructor == String){
+        msg = { server: msg };
     }
-    var trackerFullAddr = addressKey(trackerInfo.serverAddress); 
-    if (trackerFullAddr in this.votesTable) {
-        var vote = this.votesTable[trackerFullAddr];
-        if (vote.infoVersion >= trackerInfo.infoVersion) { 
-            return toRemove; //No need to update for older version
-        }  
-        //update votesTable if trackerInfo is newer updates
-        vote.infoVersion = trackerInfo.version,
-        vote.servers = trackedServerList;
-    } else {
-        this.votesTable[trackerFullAddr] = {
-            version: trackerInfo.infoVersion,
-            servers: trackedServerList,
-            tracker: trackerInfo.serverAddress,
-        };
-    }
-     
-    //2) Merge ServerTable
-    var newServerTable = trackerInfo.serverTable;
-    for (var serverAddr in newServerTable) {
-        var newServerInfo = newServerTable[serverAddr];
-        var serverInfo = this.serverTable[serverAddr];
-        if (serverInfo && serverInfo.infoVersion >= newServerInfo.infoVersion) {
-            continue;
-        }
-        this.serverTable[serverAddr] = newServerInfo;
-    } 
-    
-    //3) Purge ServerTable
-    toRemove = this._purge();
-    return toRemove;
-}
-
-
-BrokerRouteTable.prototype.removeTracker = function (trackerAddress) {
-    var trackerFullAddr = addressKey(trackerAddress);
-    if (!(trackerFullAddr in this.votesTable)) {
-        return [];
-    }
-    delete this.votesTable[trackerFullAddr];
-    return this._purge();
+    return this.invokeObject(Protocol.SSL, msg) 
 } 
 
-BrokerRouteTable.prototype._purge = function () {
-    var toRemove = [];
-    //Find servers to remove
-    for (var serverAddr in this.serverTable) {
-        var serverInfo = this.serverTable[serverAddr];
-        var serverAddress = serverInfo.serverAddress;
-        
-        var count = 0;
-        for (var trackerAddr in this.votesTable) {//count on votesTable
-            var vote = this.votesTable[trackerAddr];
-            if (containsAddress(vote.servers, serverAddress)) count++; 
-        }
-        var voterCount = hashSize(this.votesTable);
-        if (count < voterCount * this.voteFactor) {
-            toRemove.push(serverAddress);
-        }
-    }
-    //Remove servers
-    for (var i in toRemove) {
-        var serverAddress = toRemove[i];
-        var addrKey = addressKey(serverAddress);
-        delete this.serverTable[addrKey];
-    }
-
-    this._rebuildTopicTable();
-    return toRemove;
+MqClient.prototype.query = function (msg) { 
+    return this.invokeObject(Protocol.QUERY, msg);
+} 
+MqClient.prototype.declare = function (msg) {
+    return this.invokeObject(Protocol.DECLARE, msg);
+} 
+MqClient.prototype.remove = function (msg) {
+    return this.invokeCmd(Protocol.REMOVE, msg);
 }
-
-
-BrokerRouteTable.prototype._rebuildTopicTable = function () { 
-    this.topicTable = {};
-    for (var fullAddr in this.serverTable) {
-        var serverInfo = this.serverTable[fullAddr]; 
-        var serverTopicTable = serverInfo.topicTable;
-        for (var topic in serverTopicTable) {
-            var serverTopicInfo = serverTopicTable[topic];
-            if (!(topic in this.topicTable)) {
-                this.topicTable[topic] = [serverTopicInfo];
-            } else {
-                this.topicTable[topic].push(serverTopicInfo);
-            }
-        }
-    }
+MqClient.prototype.empty = function (msg) {
+    return this.invokeCmd(Protocol.EMPTY, msg);
 }
-
-
-function Broker(trackerAddressList) {
-    this.trackerSubscribers = {};
-    this.clientTable = {};
-    this.routeTable = new BrokerRouteTable();  
-
-    this.sslCertFileTable = {};
-    this.defaultSslCertFile = null;
-
-    this.onServerJoin = null;
-    this.onServerLeave = null;
-    this.onServerUpdated = null;
-
-    this.readyServerRequired = 0;
-    this.readyTriggered = false;
-    this.onReady = null;
-    this.readyTimeout = 3000;//3 seconds
-
-    if (trackerAddressList) {
-    	var bb = trackerAddressList.split(";");
-    	for(var i in bb){
-    		var trackerAddress = bb[i];
-    		if(trackerAddress.trim() == "") continue;;
-    		this.addTracker(trackerAddress);
-    	} 
-    } 
+MqClient.prototype.produce = function (msg) {
+    return this.invokeCmd(Protocol.PRODUCE, msg); 
 }
+MqClient.prototype.consume = function (msg) { 
+    return this.invokeCmd(Protocol.CONSUME, msg);
+} 
 
-Broker.prototype.ready = function (readyHandler) {
-    this.onReady = readyHandler;
-    if (this.readyTriggered) {
-        if(this.onReady) this.onReady();
+
+class BrokerRouteTable {
+    constructor() {
+        this.serverTable = {};  //{ ServerAddress => ServerInfo }
+        this.topicTable = {};   //{ TopicName=>{ ServerAddres=>TopicInfo } }
+        this.votesTable = {};   //{ TrackerAddress => { servers: Set[ServerAddress], version: xxx, tracker: ServerAddress } }
+        this.voteFactor = 0.5;  //for a serverInfo, how much percent of trackers should have voted
+        this.votedTrackers = {};
     }
-}
-
-Broker.prototype.select = function (serverSelector, topic) {
-    keys = serverSelector(this.routeTable, topic);
-    var clients = [];
-    for (var i in keys) {
-        var key = keys[i];
-        if (key in this.clientTable) {
-            clients.push(this.clientTable[key]);
-        }
-    }
-    return clients;
-}
-
-Broker.prototype.addTracker = function (trackerAddress, certFile) {
-    trackerAddress = normalizeAddress(trackerAddress, certFile);
-    var fullAddr = addressKey(trackerAddress);
-    if (certFile) {
-        this.sslCertFileTable[trackerAddress.address] = certFile;
-    }
-
-    if (fullAddr in this.trackerSubscribers) return;
-
-    var client = this._createClient(trackerAddress, certFile);
-    this.trackerSubscribers[fullAddr] = client;
-
-    var broker = this; 
-    var remoteTrackerAddress = trackerAddress;
-    client.connect(function (event) {
-        var msg = {};
-        msg.cmd = Protocol.TRACK_SUB;
-        client.sendMessage(msg);
-    });
-
-    client.onDisconnected = function(){
-        var toRemove = broker.routeTable.removeTracker(remoteTrackerAddress);
-        for (var i in toRemove) {
-            var serverAddress = toRemove[i];
-            broker._removeServer(serverAddress); 
-        }
-    }
-
-    client.onMessage = function (msg) {
-        if (msg.status != "200") {
-            console.log("Warn: " + msg);
-            return;
-        }
-        var trackerInfo = msg.body; 
-        //update tracker address
-        remoteTrackerAddress = trackerInfo.serverAddress;
-        broker.sslCertFileTable[trackerInfo.serverAddress.address] = certFile
-
-        var toRemove = broker.routeTable.updateTracker(trackerInfo);
-        if (!broker.readyTriggered) {
-            broker.readyServerRequired = hashSize(trackerInfo.serverTable);
-        }
-        var serverTable = broker.routeTable.serverTable;
-        for (var serverAddr in serverTable) {
-            var serverInfo = serverTable[serverAddr];
-            broker._addServer(serverInfo);
-        }
-        for (var i in toRemove) {
-            var serverAddress = toRemove[i];
-            broker._removeServer(serverAddress); 
-        }
-        if (broker.onServerUpdated) {
-            broker.onServerUpdated();
-        }
-    } 
-
-    setTimeout(function () {
-        if (!broker.readyTriggered) {
-            broker.readyTriggered = true;
-            if (broker.onReady) {
-                try { broker.onReady(); } catch (e) { console.log(e); }
-            }
-        }
-    }, this.readyTimeout);
-}
-
-
-Broker.prototype._addServer = function (serverInfo) {
-    serverAddress = serverInfo.serverAddress; 
-    var fullAddr = addressKey(serverAddress);  
-    var client = this.clientTable[fullAddr];
-    if (client != null) { 
-        return;
-    } 
-    client = this._createClient(serverAddress);
-    this.clientTable[fullAddr] = client;
     
-    var broker = this;
-    client.connect(function () {
-        if (broker.onServerJoin) {
-            console.log("Server Joined: " + fullAddr);
-            broker.onServerJoin(serverInfo);
+    updateTracker (trackerInfo) {
+        var trackerFullAddr = addressKey(trackerInfo.serverAddress); 
+        this.votedTrackers[trackerFullAddr] = true;
+        var toRemove = [];
+        //1) Update VotesTable
+        var trackedServerList = [];
+        for(var serverAddr in trackerInfo.serverTable){
+            var serverInfo = trackerInfo.serverTable[serverAddr];
+            trackedServerList.push(serverInfo.serverAddress);
+        } 
+        if (trackerFullAddr in this.votesTable) {
+            var vote = this.votesTable[trackerFullAddr];
+            if (vote.infoVersion >= trackerInfo.infoVersion) { 
+                return toRemove; //No need to update for older version
+            }  
+            //update votesTable if trackerInfo is newer updates
+            vote.infoVersion = trackerInfo.version,
+            vote.servers = trackedServerList;
+        } else {
+            this.votesTable[trackerFullAddr] = {
+                version: trackerInfo.infoVersion,
+                servers: trackedServerList,
+                tracker: trackerInfo.serverAddress,
+            };
+        }
+        
+        //2) Merge ServerTable
+        var newServerTable = trackerInfo.serverTable;
+        for (var serverAddr in newServerTable) {
+            var newServerInfo = newServerTable[serverAddr];
+            var serverInfo = this.serverTable[serverAddr];
+            if (serverInfo && serverInfo.infoVersion >= newServerInfo.infoVersion) {
+                continue;
+            }
+            this.serverTable[serverAddr] = newServerInfo;
+        } 
+        
+        //3) Purge ServerTable
+        toRemove = this._purge();
+        return toRemove;
+    }
+
+
+    removeTracker (trackerAddress) {
+        var trackerFullAddr = addressKey(trackerAddress);
+        if (!(trackerFullAddr in this.votesTable)) {
+            return [];
+        }
+        delete this.votesTable[trackerFullAddr];
+        return this._purge();
+    } 
+
+    _purge() {
+        var toRemove = [];
+        //Find servers to remove
+        for (var serverAddr in this.serverTable) {
+            var serverInfo = this.serverTable[serverAddr];
+            var serverAddress = serverInfo.serverAddress;
+            
+            var count = 0;
+            for (var trackerAddr in this.votesTable) {//count on votesTable
+                var vote = this.votesTable[trackerAddr];
+                if (containsAddress(vote.servers, serverAddress)) count++; 
+            }
+            var totalCount = hashSize(this.votedTrackers); //votedTrackers includes history
+            if (count < totalCount * this.voteFactor) {
+                toRemove.push(serverAddress);
+            }
+        }
+        //Remove servers
+        for (var i in toRemove) {
+            var serverAddress = toRemove[i];
+            var addrKey = addressKey(serverAddress);
+            delete this.serverTable[addrKey];
+        }
+ 
+        this.topicTable = {};
+        for (var fullAddr in this.serverTable) {
+            var serverInfo = this.serverTable[fullAddr]; 
+            var serverTopicTable = serverInfo.topicTable;
+            for (var topic in serverTopicTable) {
+                var serverTopicInfo = serverTopicTable[topic];
+                if (!(topic in this.topicTable)) {
+                    this.topicTable[topic] = [serverTopicInfo];
+                } else {
+                    this.topicTable[topic].push(serverTopicInfo);
+                }
+            }
         }
 
-        broker.readyServerRequired--;
-        if (broker.readyServerRequired <= 0) {
+        return toRemove;
+    }
+}
+
+
+class Broker {
+    constructor(trackerAddressList, readyTimeout){ 
+        this.trackerSubscribers = {};
+        this.clientTable = {};
+        this.routeTable = new BrokerRouteTable();   
+
+        this.onServerJoin = null;
+        this.onServerLeave = null;
+        this.onServerUpdated = null;
+
+        this.readyTable = {};  
+        this.readyTriggered = false;
+        this.readyTimeout = readyTimeout;
+        if(!this.readyTimeout) this.readyTimeout = 3000; //default 3 seconds
+
+        var broker = this;
+        this.readyPromise = new Promise(resolve=>{
+            broker.onReady = resolve;
+        });
+
+        this._addTracker(trackerAddressList); 
+
+        this.readyTimeoutFn = setTimeout(function () {
             if (!broker.readyTriggered) {
                 broker.readyTriggered = true;
                 if (broker.onReady) {
-                    try { broker.onReady(); } catch (e) { console.log(e); }
+                    try { broker.onReady(); } catch (e) { logger.debug(e); }
                 }
             }
-        }
-    });  
-}
-
-Broker.prototype._removeServer = function (serverAddress) { 
-    var fullAddr = addressKey(serverAddress);
-    var client = this.clientTable[fullAddr];
-    if (client == null) {
-        return;
+        }, this.readyTimeout);
     }
 
-    if (this.onServerLeave) {
-        console.log("Server Left: " + fullAddr);
-        this.onServerLeave(serverAddress);
+    close() {
+        clearTimeout(this.readyTimeoutFn);
+        for(var i in this.clientTable){
+            var client = this.clientTable[i];
+            client.close();
+        }
+        this.clientTable = {};
+        for(var i in this.trackerSubscribers){
+            var sub = this.trackerSubscribers[i];
+            sub.close();
+        }
+        this.trackerSubscribers = {};
     }
 
-    client.close();
-    delete this.clientTable[fullAddr]; 
-}
- 
+    ready() {
+        return this.readyPromise;
+    }
 
-Broker.prototype._createClient = function (serverAddress, certFile) {
-    if (serverAddress.sslEnabled) {
-        if (!certFile) {
-            certFile = this.sslCertFileTable[serverAddress.address];
+    select(serverSelector, msg) {
+        var keys = serverSelector(this.routeTable, msg);
+        var clients = [];
+        for (var i in keys) {
+            var key = keys[i];
+            if (key in this.clientTable) {
+                clients.push(this.clientTable[key]);
+            }
         }
-        if (!certFile) {
-            certFile = this.defaultSslCertFile;
+        return clients;
+    }
+
+    addTracker(trackerAddress) {
+        trackerAddress = new ServerAddress(trackerAddress);
+        var addrKey = trackerAddress.string(); 
+        if (addrKey in this.trackerSubscribers){
+            var promise = this.readyTable[addrKey];
+            return promise;
         } 
-    }
-    return new MqClient(serverAddress, certFile);
-} 
+        var readyCount = {count: 0, triggered: false};
+        var promise = new Promise((resolve, reject)=>{
+            readyCount.resolve = resolve;
+        }); 
 
-////////////////////////////////////////////////////////// 
-function MqAdmin(broker) {
-    this.broker = broker;
-    this.adminServerSelector = function (routeTable, topic) {
-        return Object.keys(routeTable.serverTable);
-    }
-}
+        var client = new MqClient(trackerAddress);
+        this.trackerSubscribers[addrKey] = client;
 
-MqAdmin.prototype._invoke = function (func, msg, serverSelector, callback) {
-    if (typeof (msg) == 'string') {
-        msg = { topic: msg };
-    } 
-    var clients = this.broker.select(serverSelector, msg.topic);
-    if (clients.length < 1) return;
-    if (clients.length == 1) {
-        clients[0][func](msg, callback);
-        return;
-    }
-    var promises = [];
-    for (var i in clients) {
-        var client = clients[i];
-        var promise = new Promise(function (resolve, reject) {
-            client[func](msg, function (msg) {
-                resolve(msg);
-            })
+        var broker = this;  
+        client.connect(function () {
+            var msg = {
+                cmd: Protocol.TRACK_SUB,
+                token: trackerAddress.token
+            }; 
+            client.send(msg);
         });
-        promises.push(promise);
-    }
-    Promise.all(promises).then(function (values) {
-        if(callback) callback(values);
-    });
-}
 
-MqAdmin.prototype.declare = function (msg, callback) { 
-    this._invoke(Protocol.DECLARE, msg, this.adminServerSelector, callback);
-}
-MqAdmin.prototype.query = function (msg, callback) {
-    this._invoke(Protocol.QUERY, msg, this.adminServerSelector, callback);
-}
-MqAdmin.prototype.remove = function (msg, callback) {
-    this._invoke(Protocol.REMOVE, msg, this.adminServerSelector, callback);
-}
-MqAdmin.prototype.empty = function (msg, callback) {
-    this._invoke(Protocol.EMPTY, msg, this.adminServerSelector, callback);
-}
- 
-
-function Producer(broker) {
-    MqAdmin.call(this, broker);
-    this.produceServerSelector = function (routeTable, topic) {
-        if (hashSize(routeTable.serverTable) == 0) return [];
-        var topicList = routeTable.topicTable[topic];
-        if (!topicList || topicList.length == 0) { 
-            return [randomKey(routeTable.serverTable)]; //random select
-        }
-        var target = topicList[0];
-        for (var i = 1; i < topicList.length; i++) {
-            var current = topicList[i];
-            if (target.consumerCount < current.consumerCount) {
-                target = current;
+        client.onDisconnected = function(){
+            var toRemove = broker.routeTable.removeTracker(client.serverAddress);
+            for (var i in toRemove) {
+                var serverAddress = toRemove[i];
+                broker._removeServer(serverAddress); 
             }
         }
-        return [addressKey(target.serverAddress)];
-    }
-} 
-inherits(Producer, MqAdmin)
 
-Producer.prototype.publish = function (msg, callback) {
-    this._invoke(Protocol.PRODUCE, msg, this.produceServerSelector, callback);
-} 
-
- 
-function Consumer(broker, consumeCtrl) {
-    MqAdmin.call(this, broker); 
-    this.consumeServerSelector = function (routeTable, topic) {
-        return Object.keys(routeTable.serverTable);
-    }
-    this.connectionCount = 1;
-    this.messageHandler = null;
-    if (typeof consumeCtrl == 'string') {
-        consumeCtrl = {topic: consumeCtrl}
-    }
-    this.consumeCtrl = consumeCtrl;
-
-    this.consumeClientTable = {}; //addressKey => list of MqClient consuming
-} 
-inherits(Consumer, MqAdmin);
-
-Consumer.prototype.consumeToServer = function (clientInBrokerTable) {
-    var addr = addressKey(clientInBrokerTable.serverAddress);
-    if (addr in this.consumeClientTable) return; 
-
-    var consumingClients = [];
-    var consumer = this;
-    for (var i = 0; i < this.connectionCount; i++) {
-        var consumeClient = clientInBrokerTable.fork();
-        consumingClients.push(consumeClient); 
-        consumer.consume(consumeClient, consumer.consumeCtrl);  
-    }
-    this.consumeClientTable[addr] = consumingClients; 
-}
-
-Consumer.prototype.leaveServer = function (serverAddress) {
-    var addr = addressKey(serverAddress);
-    var consumingClients = this.consumeClientTable[addr];
-    if (!consumingClients) return;
-    for (var i in consumingClients) {
-        var client = consumingClients[i];
-        client.close();
-    }
-    delete this.consumeClientTable[addr]; 
-}
-
-Consumer.prototype.start = function () {
-    var clientTable = this.broker.clientTable;
-    for (var addr in clientTable) {
-        var client = clientTable[addr];
-        this.consumeToServer(client)
-    }
-    var consumer = this;
-    this.broker.onServerJoin = function (serverInfo) {
-        var addr = addressKey(serverInfo.serverAddress);
-        var client = consumer.broker.clientTable[addr];
-        if (!client) {
-            console.log("WARN: " + addr + " not found in broker clientTable");
-            return;
-        }
-        consumer.consumeToServer(client);
-    }
-    this.broker.onServerLeave = function (serverAddress) {
-        consumer.leaveServer(serverAddress);
-    }
-}
-
-
-Consumer.prototype.consume = function(client, consumeCtrl) { 
-    var messageHandler = this.messageHandler;
-    function consumeCallback(consumeCtrl, res) {
-        if (res.status == 404) {
-            client.declare(consumeCtrl, function (res) {
-                if (res.status != 200) {
-                    console.log("declare error: " + res);
-                    return;
-                }
-                client.consume(consumeCtrl, function (res) {
-                    consumeCallback(consumeCtrl, res);
-                })
-            });
-            return;
-        }
-         
-        var originUrl = res.originUrl
-        var id = res.originId; 
-        delete res.originUrl
-        delete res.originId
-        if (typeof originUrl == "undefined") originUrl = "/";  
-        res.id = id;
-        res.url = originUrl;
-
-        if (messageHandler) {
-            try{
-            	messageHandler(res, client);
-            } finally {
-                client.consume(consumeCtrl, function (res) {
-                    consumeCallback(consumeCtrl, res);
-                })
-            } 
-        } 
-    }
-    client.connect(function(){
-        client.declare(consumeCtrl, function(res){
-            if (res.status != 200) {
-                console.log("declare error: " + res);
+        client.onMessage = function (msg) {
+            if (msg.status != 200) {
+                logger.warn(msg);
                 return;
             }
-            client.consume(consumeCtrl, function (res) {
-                consumeCallback(consumeCtrl,res);
-            });
-        }); 
-    })
+            var trackerInfo = msg.body;
+            
+            //update remote real address
+            var trackerAddress = new ServerAddress(trackerInfo.serverAddress);
+            client.serverAddress.address = trackerAddress.address; 
+
+            var addrKey = trackerAddress.string();
+            if(!(addrKey in broker.readyTable)) {
+                broker.readyTable[addrKey] = readyCount; 
+                readyCount.triggered = false;
+            }  
+            readyCount.count = hashSize(trackerInfo.serverTable);
+
+            var toRemove = broker.routeTable.updateTracker(trackerInfo);
+            var serverTable = broker.routeTable.serverTable;
+            for (var serverAddr in serverTable) {
+                var serverInfo = serverTable[serverAddr];
+                broker._addServer(serverInfo, readyCount, trackerAddress);
+            }
+            for (var i in toRemove) {
+                var serverAddress = toRemove[i];
+                broker._removeServer(serverAddress); 
+            }
+            if (broker.onServerUpdated) {
+                broker.onServerUpdated();
+            }
+        }  
+    } 
+
+    _addTracker(trackerAddressList){
+        if(trackerAddressList){
+            if(trackerAddressList.constructor == String){
+                var bb = trackerAddressList.split(";");
+                for(var i in bb){
+                    var trackerAddress = bb[i];
+                    if(trackerAddress.trim() == "") continue; 
+                    this.addTracker(trackerAddress);
+                } 
+            }
+            if(trackerAddressList.constructor == Array){
+                for(var i in trackerAddressList){
+                    var trackerAddress = trackerAddressList[i];
+                    trackerAddress = new ServerAddress(trackerAddress);
+                    this.addTracker(trackerAddress);
+                }
+            }
+            if(trackerAddressList.constructor == ServerAddress){
+                var trackerAddress = trackerAddressList;
+                this.addTracker(trackerAddress);
+            } 
+            this.addTracker(trackerAddressList);
+        } 
+    }
+
+    _addServer(serverInfo, readyCount, trackerAddress) {
+        var serverAddress = serverInfo.serverAddress;  
+        serverAddress = new ServerAddress(serverAddress); 
+        if(serverAddress.sslEnabled) {
+            var sslClient = new MqClient(trackerAddress);
+            var req = {
+                server: serverAddress.address,
+                token: trackerAddress.token,
+            }
+            sslClient.connect(()=>{
+                sslClient.ssl(req).then(certificate=>{
+                    serverAddress.certificate = certificate;
+                    this._addServerWithReadyAddress(serverInfo, serverAddress, readyCount);
+                }); 
+            }) 
+        } else {
+            this._addServerWithReadyAddress(serverInfo, serverAddress, readyCount);
+        } 
+    }
+
+    _addServerWithReadyAddress(serverInfo, serverAddress, readyCount) {
+        var addrKey = serverAddress.string();  
+        var client = this.clientTable[addrKey];
+        if (client != null) { 
+            return;
+        } 
+        client = new MqClient(serverAddress);
+        this.clientTable[addrKey] = client;  
+        var broker = this;
+
+        client.connect(function () {
+            if (broker.onServerJoin) {
+                logger.info("Server Joined: " + addrKey);
+                broker.onServerJoin(serverInfo);
+            }  
+            
+            readyCount.count--;
+            if (readyCount.count <= 0) {
+                if(readyCount.resolve){
+                    readyCount.resolve();
+                }
+                readyCount.triggered = true;
+                if (!broker.readyTriggered) {
+                    broker.readyTriggered = true;
+                    if (broker.onReady) {
+                        try { broker.onReady(); } catch (e) { logger.debug(e); }
+                    }
+                }
+            }
+        });  
+    }
+
+    _removeServer(serverAddress) { 
+        serverAddress = new ServerAddress(serverAddress);
+        var addrKey = serverAddress.string();
+        var client = this.clientTable[addrKey];
+        if (client == null) {
+            return;
+        }
+
+        if (this.onServerLeave) {
+            logger.info("Server Left: " + addrKey);
+            this.onServerLeave(serverAddress);
+        }
+
+        client.close();
+        delete this.clientTable[addrKey]; 
+    } 
 }
 
-
-function RpcInvoker(broker, topic, ctrl) { 
-    this.broker = broker;
-    this.prodcuer = new Producer(broker); 
-    if (ctrl) {
-        this.ctrl = clone(ctrl);
-        this.ctrl.topic = topic;
-    } else {
-        this.ctrl = { topic: topic }
-    } 
-    var invoker = this;
-
-    return new Proxy(this, {
-        get: function (target, name) {
-            return name in target ? target[name] : invoker._proxyMethod(name);
+////////////////////////////////////////////////////////// 
+class MqAdmin {
+    constructor(broker, token){
+        this.broker = broker;
+        this.adminServerSelector = (routeTable, msg) => {
+            return Object.keys(routeTable.serverTable);
         }
-    });
-} 
+        this.token = token;
+    }
 
-RpcInvoker.prototype._proxyMethod = function (method) {
-    var invoker = this;
-    return function () { 
-        var callback;
-        if(arguments.length > 0){ 
-            var callback = arguments[arguments.length - 1];
-            if (typeof (callback) != 'function') {
-                callback = null;
+    invokeCmd0(func, msg, serverSelector) { 
+        if(!serverSelector){
+            serverSelector = this.adminServerSelector;
+        } 
+        var clients = this.broker.select(serverSelector, msg);
+        if (clients.length < 1) {
+            throw new Error("Missing server for topic: " + msg.topic);
+        }
+        if(msg.constructor == String){
+            msg = {topic: msg};
+        }
+        if(!msg.token) {
+            msg.token = this.token;
+        }
+
+        if (clients.length == 1) {
+            return clients[0][func](msg); 
+        }
+        var promises = [];
+        for (var i in clients) {
+            var client = clients[i]; 
+            promises.push(client[func](msg));
+        }
+        return Promise.all(promises);
+    }
+
+    invokeCmd(func, msg, serverSelector) {  
+        var admin = this;
+        if(!this.broker.readyTriggered){
+            return this.broker.ready().then(()=>{
+                return admin.invokeCmd0(func, msg, serverSelector);
+            })
+        }
+        return this.invokeCmd0(func, msg, serverSelector);
+    }
+
+    declare(msg, serverSelector) { 
+        return this.invokeCmd(Protocol.DECLARE, msg, serverSelector);
+    }
+    query (msg, serverSelector) {
+        return this.invokeCmd(Protocol.QUERY, msg, serverSelector);
+    }
+    remove(msg, serverSelector) {
+        return this.invokeCmd(Protocol.REMOVE, msg, serverSelector);
+    }
+    empty(msg, serverSelector) {
+        return this.invokeCmd(Protocol.EMPTY, msg, serverSelector);
+    }
+}
+ 
+
+class Producer extends(MqAdmin) {
+    constructor(broker, token) {
+        super(broker, token);
+        this.produceServerSelector = (routeTable, msg) => {
+            var topic = msg.topic;
+            if (hashSize(routeTable.serverTable) == 0) return [];
+            var topicList = routeTable.topicTable[topic];
+            if (!topicList || topicList.length == 0) { 
+                return [randomKey(routeTable.serverTable)]; //random select
             }
+            var target = topicList[0];
+            for (var i = 1; i < topicList.length; i++) {
+                var current = topicList[i];
+                if (target.consumerCount < current.consumerCount) {
+                    target = current;
+                }
+            }
+            return [addressKey(target.serverAddress)];
         }
-        var len = arguments.length;
-        if (callback) len--;
-        var params = [];
-        for (var i = 0; i < len; i++) {
-            params.push(arguments[i]);
+    }  
+
+    publish(msg, serverSelector) {
+        if(!serverSelector){
+            serverSelector = this.produceServerSelector;
         }
-        req = {
-            method: method,
-            params: params,
+        return this.invokeCmd(Protocol.PRODUCE, msg, serverSelector);
+    } 
+}
+
+ 
+class Consumer extends MqAdmin {
+    constructor(broker, consumeCtrl){
+        super(broker, consumeCtrl.token); 
+
+        this.consumeServerSelector = (routeTable, msg) => {
+            return Object.keys(routeTable.serverTable);
+        }
+        this.connectionCount = 1;
+        this.messageHandler = null;
+        if (consumeCtrl.constructor == String) {
+            consumeCtrl = {
+                topic: consumeCtrl,
+                token: this.token
+            };
+        }
+        this.consumeCtrl = clone(consumeCtrl); 
+
+        this.consumeClientTable = {}; //addressKey => list of MqClient consuming
+    }  
+
+    start() {
+        var clientTable = this.broker.clientTable;
+        for (var addr in clientTable) {
+            var client = clientTable[addr];
+            this.consumeToServer(client)
+        }
+        var consumer = this;
+        this.broker.onServerJoin = function (serverInfo) {
+            var addr = addressKey(serverInfo.serverAddress);
+            var client = consumer.broker.clientTable[addr];
+            if (!client) {
+                logger.warn(addr + " not found in broker clientTable");
+                return;
+            }
+            consumer.consumeToServer(client);
+        }
+        this.broker.onServerLeave = function (serverAddress) {
+            consumer.leaveServer(serverAddress);
+        }
+    }
+    
+
+    consumeToServer(clientInBrokerTable) {
+        var addr = addressKey(clientInBrokerTable.serverAddress);
+        if (addr in this.consumeClientTable) return; 
+    
+        if(!this.messageHandler) {
+            throw new Error("Missing messageHandler");
+        }
+
+        var clients = []; 
+        var consumer = this;
+        for (var i = 0; i < this.connectionCount; i++) {
+            var client = clientInBrokerTable.fork(); //create new connections
+            clients.push(client);   
+            client.connect((client) => { //web browser need 
+                var ctrl = clone(consumer.consumeCtrl);
+                client.declare(ctrl).then(res=>{
+                    if (res.error) { 
+                        throw new Error("declare error: " + res.error);
+                    } 
+                    consumer.consume(client);
+                });
+            });  
         }  
-        invoker._invokeMethod(req, callback);
+        this.consumeClientTable[addr] = clients; 
+    }
+
+    leaveServer(serverAddress) {
+        var addr = addressKey(serverAddress);
+        var consumingClients = this.consumeClientTable[addr];
+        if (!consumingClients) return;
+        for (var i in consumingClients) {
+            var client = consumingClients[i];
+            client.close();
+        }
+        delete this.consumeClientTable[addr]; 
+    } 
+
+    consume(client) {  
+        var consumer = this; 
+        var ctrl = clone(this.consumeCtrl);
+        client.token = this.consumeCtrl.token; //!!client need this token in route message!!
+
+        client.consume(ctrl)
+        .then(res => {
+            if(res.status == 404) {//Missing topic, to declare 
+                var ctrl = clone(consumer.consumeCtrl);
+                return client.declare(ctrl)
+                .then(res=>{
+                    if (res.error) { 
+                        throw new Error("declare error: " + res.error);
+                    } 
+                    return consumer.consume(client);
+                });
+            } 
+
+            var originUrl = res.originUrl;
+            var id = res.originId; 
+            delete res.originUrl;
+            delete res.originId;
+            if (typeof originUrl == "undefined") originUrl = "/";  
+            res.id = id;
+            res.url = originUrl; 
+            try {
+                consumer.messageHandler(res, client);
+            } finally {
+                consumer.consume(client);
+            } 
+        }); 
     }
 }
 
-RpcInvoker.prototype._invokeMethod = function (req, callback) {
-    var msg = clone(this.ctrl);
-    msg.body = JSON.stringify(req);
-    msg.ack = false;
-    this.prodcuer.publish(msg, function (msg) {
-        if (callback) {
-            if (msg.status != "200") {
+class RpcInvoker { 
+    constructor(broker, topicOrCtrl, serverSelector){
+        if(serverSelector){
+            this.rpcServerSelector = serverSelector;
+        }  else {
+            this.rpcServerSelector = (routeTable, msg) => {
+                var topic = msg.topic;
+                if (hashSize(routeTable.serverTable) == 0) return [];
+                var topicList = routeTable.topicTable[topic];
+                if (!topicList || topicList.length == 0) { 
+                    return [randomKey(routeTable.serverTable)]; //random select
+                }
+                var target = topicList[0];
+                for (var i = 1; i < topicList.length; i++) {
+                    var current = topicList[i];
+                    if (target.consumerCount < current.consumerCount) {
+                        target = current;
+                    }
+                }
+                return [addressKey(target.serverAddress)];
+            }
+        } 
+
+        this.broker = broker;
+        this.prodcuer = new Producer(broker); 
+        if(topicOrCtrl.constructor == String){
+            this.ctrl = {topic: topicOrCtrl};
+        } else {
+            this.ctrl = clone(topicOrCtrl); 
+        } 
+        var invoker = this; 
+        return new Proxy(this, {
+            get: function (target, name) {
+                return name in target ? target[name] : invoker.proxyMethod(name);
+            }
+        });
+    } 
+
+     //{ method: xxx, params:[], module: xxx}
+    invoke(){ 
+        if (arguments.length < 1) {
+            throw "Missing request parameter";
+        }
+        var req = arguments[0]; 
+        if (typeof (req) == 'string') { 
+            var params = [];
+            var len = arguments.length; 
+            for (var i = 1; i < len; i++) {
+                params.push(arguments[i]);
+            }
+            req = {
+                method: req,
+                params: params,
+            }
+        } 
+        return this.invokeMethod(req);
+    } 
+ 
+    invokeMethod(req) {
+        var msg = clone(this.ctrl);
+        msg.body = JSON.stringify(req);
+        msg.ack = false;
+        
+        return this.prodcuer.publish(msg, this.rpcServerSelector)
+        .then(msg => {
+            if (msg.status != 200) {
                 throw msg.body;
             }
-            
+            var res = {};
             if(typeof(msg.body) == 'string'){
-            	res = JSON.parse(msg.body);
+                res = JSON.parse(msg.body);
             } else {
-            	res = msg.body;
+                res = msg.body;
             }  
             if (res.error) {
                 throw res.error;
             }
-            callback(res.result);
-        }
-    });
-}
+            return res.result;
+        });
+    } 
 
-//{ method: xxx, params:[], module: xxx]
-RpcInvoker.prototype.invoke = function(){ 
-    if (arguments.length < 1) {
-        throw "Missing request parameter";
-    }
-    var req = arguments[0];
-    var callback = arguments[arguments.length - 1];
-    if (typeof (callback) != 'function') {
-        callback = null;
-    }
-
-    if (typeof (req) == 'string') { 
-        var params = [];
-        var len = arguments.length;
-        if (callback) len--;
-        for (var i = 1; i < len; i++) {
-            params.push(arguments[i]);
-        }
-        req = {
-            method: req,
-            params: params,
-        }
-    }
-
-    this._invokeMethod(req, callback);
-}
-
-
-function RpcProcessor() {
-    this.methodTable = {}
-
-    var processor = this;
-    this.messageHandler = function (msg, client) {
-        var res = { error: null };  
-        var resMsg = {
-            id: msg.id,
-            recver: msg.sender,
-            topic: msg.topic,
-            status: 200,
-            body: res,
-        }; 
-        
-        try { 
-            var req = msg.body;
-            if(typeof(req) == 'string') req = JSON.parse(req);  
-            var key = processor._generateKey(req.module, req.method);
-            var m = processor.methodTable[key];
-            if(m) {
-                try {
-                    res.result = m.method.apply(m.target, req.params); 
-                } catch (e) {
-                    res.error = e; 
-                }  
-            } else {
-                res.error = "method(" + key + ") not found";
-            } 
-        } catch (e) {
-            res.error = e; 
-        } finally {   
-            try { client.route(resMsg); } catch (e) { }
+    proxyMethod(method) {
+        var invoker = this;
+        return function () {  
+            var len = arguments.length; 
+            var params = [];
+            for (var i = 0; i < len; i++) {
+                params.push(arguments[i]);
+            }
+            var req = {
+                method: method,
+                params: params,
+            }  
+            return invoker.invokeMethod(req);
         }
     }
 }
 
-RpcProcessor.prototype._generateKey = function(moduleName, methodName){
-    if (moduleName) return moduleName + ":" + methodName;
-    return ":" + methodName;
-}
-
-RpcProcessor.prototype.addModule = function (serviceObj, moduleName) {
-    if (typeof (serviceObj) == 'function') {
-        var func = serviceObj;
-        var key = this._generateKey(moduleName, func.name);
-        if (key in this.methodTable) {
-            console.log("WARN: " + key + " already exists, will be overriden");
+class RpcProcessor {
+    constructor(){
+        this.methodTable = {} 
+        var processor = this;
+        this.messageHandler = function (msg, client) {
+            var res = { error: null };  
+            var resMsg = {
+                id: msg.id,
+                recver: msg.sender,
+                topic: msg.topic,
+                status: 200,
+                body: res,
+            }; 
+            
+            try { 
+                var req = msg.body;
+                if(typeof(req) == 'string') req = JSON.parse(req);  
+                var key = processor._generateKey(req.module, req.method);
+                var m = processor.methodTable[key];
+                if(m) {
+                    try {
+                        res.result = m.method.apply(m.target, req.params); 
+                    } catch (e) {
+                        res.error = e; 
+                    }  
+                } else {
+                    res.error = "method(" + key + ") not found";
+                } 
+            } catch (e) {
+                res.error = e; 
+            } finally {   
+                try { client.route(resMsg); } catch (e) { }
+            }
         }
-        this.methodTable[key] = { method: func, target: null};
-        return;
     }
 
-    for (var name in serviceObj) {
-        var func = serviceObj[name];
-        if (typeof (func) != 'function') continue;
-        var key = this._generateKey(moduleName, name);
-        if (key in this.methodTable) {
-            console.log("WARN: " + key + " already exists, will be overriden");
+    _generateKey(moduleName, methodName){
+        if (moduleName) return moduleName + ":" + methodName;
+        return ":" + methodName;
+    }
+
+    addModule(serviceObj, moduleName) {
+        if (typeof (serviceObj) == 'function') {
+            var func = serviceObj;
+            var key = this._generateKey(moduleName, func.name);
+            if (key in this.methodTable) {
+                logger.warn(key + " already exists, will be overriden");
+            }
+            this.methodTable[key] = { method: func, target: null};
+            return;
         }
-        this.methodTable[key] = { method: func, target: serviceObj };
+
+        for (var name in serviceObj) {
+            var func = serviceObj[name];
+            if (typeof (func) != 'function') continue;
+            var key = this._generateKey(moduleName, name);
+            if (key in this.methodTable) {
+                logger.warn(key + " already exists, will be overriden");
+            }
+            this.methodTable[key] = { method: func, target: serviceObj };
+        }
+    }
+}
+
+class ServiceBootstrap {
+    constructor(){
+        this.processor = new RpcProcessor();
+        this.broker = new Broker(); 
+        this.connectionSize = 1;
+    }  
+
+    start () {
+        if(this.consumer) return; 
+        if(!this.topic){
+            throw new Error("Missing serviceName");
+        }  
+        var consumeCtrl = {
+            topic: this.topic,
+            topic_mask: Protocol.MASK_MEMORY | Protocol.MASK_RPC,
+            token: this.token
+        };
+        this.consumer = new Consumer(this.broker, consumeCtrl);
+        this.consumer.messageHandler = this.processor.messageHandler;
+        this.consumer.connectionCount = this.connectionSize; 
+        this.consumer.start(); 
+    } 
+
+    close() {
+        if(this.consumer){
+            this.consumer.close();
+            this.consumer = null;
+        }
+        if(this.broker){
+            this.broker.close();
+            this.broker = null;
+        }
+    }
+
+    serviceAddress(address){
+        this.broker._addTracker(address);
+        return this;
+    }
+    serviceName(name) {
+        this.topic = name;
+        return this;
+    } 
+    serviceToken(token){
+        this.token = token;
+        return this;
+    }   
+    connectionCount(count){
+        this.connectionSize = count;
+        return this;
+    } 
+    addModule(serviceObj, moduleName){
+        this.processor.addModule(serviceObj, moduleName);
+        return this;
+    } 
+}
+
+
+
+class ClientBootstrap {
+    constructor(){ 
+        this.broker = new Broker();  
+    }   
+    serviceAddress(address){
+        this.broker._addTracker(address);
+        return this;
+    }
+    serviceName(name) {
+        this.topic = name;
+        return this;
+    } 
+    serviceToken(token){
+        this.token = token;
+        return this;
+    }   
+    invoker(){
+        var ctrl = {
+            topic: this.topic,
+            token: this.token
+        };
+        return new RpcInvoker(this.broker, ctrl);
+    }
+    close() { 
+        if(this.broker){
+            this.broker.close();
+            this.broker = null;
+        }
     }
 }
   
 if (__NODEJS__) {
-    module.exports.Protocol = Protocol;
-    module.exports.MessageClient = MessageClient;
+    module.exports.Protocol = Protocol; 
     module.exports.MqClient = MqClient;
+    module.exports.ServerAddress = ServerAddress;
     module.exports.BrokerRouteTable = BrokerRouteTable;
     module.exports.Broker = Broker;
     module.exports.Producer = Producer;
     module.exports.Consumer = Consumer;
     module.exports.RpcInvoker = RpcInvoker;
     module.exports.RpcProcessor = RpcProcessor;
+    module.exports.ServiceBootstrap = ServiceBootstrap;
+    module.exports.ClientBootstrap = ClientBootstrap;
+    module.exports.Logger = Logger;
+    module.exports.logger = logger;
 }
 
  

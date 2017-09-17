@@ -3,6 +3,7 @@ package io.zbus.transport.tcp;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -16,12 +17,15 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.zbus.kit.StrKit;
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.transport.AbstractClient;
 import io.zbus.transport.CodecInitializer;
 import io.zbus.transport.EventLoop;
 import io.zbus.transport.Id;
+import io.zbus.transport.ServerAddress;
+import io.zbus.transport.SslKit;
 
 
 public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<REQ, RES> {
@@ -41,19 +45,30 @@ public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<RE
 
 	
 	public TcpClient(String address, EventLoop loop){   
-		group = loop.getGroup();
-		sslCtx = loop.getSslContext(); 
+		group = loop.getGroup(); 
 		
-		String[] bb = address.split(":");
-		if(bb.length > 2) {
-			throw new IllegalArgumentException("Address invalid: "+ address);
-		}
-		host = bb[0].trim();
-		if(bb.length > 1){
-			port = Integer.valueOf(bb[1]);
-		} else {
-			port = 80;
-		}    
+		Object[] hp = StrKit.hostPort(address);
+		this.host = (String)hp[0];
+		this.port = (Integer)hp[1]; 
+	} 
+	
+	public TcpClient(ServerAddress serverAddress, EventLoop loop){   
+		this.group = loop.getGroup();
+		
+		Object[] hp = StrKit.hostPort(serverAddress.address);
+		this.host = (String)hp[0];
+		this.port = (Integer)hp[1]; 
+		
+		if(serverAddress.isSslEnabled()){
+			if(serverAddress.getCertificate() == null){
+				throw new IllegalArgumentException("SSL enabled, but missing certificate content");
+			}
+			try{
+				this.sslCtx = SslKit.buildClientSsl(serverAddress.certificate);
+			} catch (Exception e) {
+				throw new IllegalStateException("SSL enabled, but SSL context creation failed", e); 
+			}  
+		} 
 	}  
 	  
 	protected String serverAddress(){
@@ -66,7 +81,7 @@ public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<RE
 
 	public synchronized void connectAsync(){  
 		init(); 
-		
+		activeLatch = new CountDownLatch(1);
 		channelFuture = bootstrap.connect(host, port);
 	}   
 	
@@ -77,16 +92,15 @@ public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<RE
 		synchronized (this) {
 			if(!hasConnected()){ 
 	    		connectAsync();
-	    		activeLatch.await(timeout,TimeUnit.MILLISECONDS);
+	    		activeLatch.await(timeout,TimeUnit.MILLISECONDS); 
 				
-				if(hasConnected()){ 
+	    		if(hasConnected()){ 
 					return;
-				}  
-				String msg = String.format("Connection(%s) timeout", serverAddress()); 
+				}   
+				channelFuture.sync();
+				String msg = String.format("Connection(%s) failed", serverAddress()); 
 				log.warn(msg);
-				cleanSession();
-				
-	    		channelFuture.sync();
+				cleanSession();  
 			}
 		} 
 	} 

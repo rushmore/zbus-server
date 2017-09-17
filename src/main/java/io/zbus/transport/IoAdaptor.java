@@ -29,7 +29,6 @@ import java.io.IOException;
 /**
  * Session life-cycle events management. This adaptor is very important point to configure user specific behavior.
  * 
- * Default implementation from NettyToIoAdaptor(Netty-Impl)
  * 
  * @author rushmore (洪磊明)
  *

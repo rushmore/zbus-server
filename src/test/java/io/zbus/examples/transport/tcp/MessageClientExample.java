@@ -11,6 +11,7 @@ public class MessageClientExample {
 		MessageClient client = new MessageClient("localhost", loop);
 
 		Message req = new Message(); 
+		req.setBody("中文");
 		Message res = client.invokeSync(req);
 		
 		System.out.println(res); 

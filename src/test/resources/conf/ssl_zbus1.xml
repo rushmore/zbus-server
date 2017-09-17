@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zbus compatible="false">   <!-- Enable compatible to zbus7 -->  
+
+	<serverHost>0.0.0.0</serverHost>  
+	<serverPort>15555</serverPort>  
+	<serverName></serverName> <!-- Public IP/Domain name -->   
+ 
+ 	<sslEnabled certFile="ssl/zbus.crt" keyFile="ssl/zbus.key">true</sslEnabled> 
+ 
+	<mqPath>/tmp/zbus</mqPath> 
+	
+	<verbose>false</verbose>   
+	
+	<trackerOnly>false</trackerOnly> 
+	<cleanMqInterval>3000</cleanMqInterval> <!-- Milliseconds -->
+	<reportToTrackerInterval>30000</reportToTrackerInterval> <!-- Milliseconds -->
+	
+	<!-- 
+	<trackerList>
+		<serverAddress>
+			<address>localhost:15556</address>  
+			<sslEnabled certFile="ssl/zbus.crt">false</sslEnabled> 
+			<token></token>
+		</serverAddress>   
+	</trackerList>  
+	-->  
+	
+	<auth enabled="true" class="">
+		<token value="" operation="js, css, img, ssl, tracker, track_sub, track_pub">  
+			<topic value="*"/>
+		</token>
+		
+		<token value="admin" operation="admin"/> 
+		
+		<token value="MyTopic_Group1" operation="declare,produce,consume,track_sub"> 
+			<topic value="MyTopic">	
+				<consumeGroup>Group1</consumeGroup> 
+			</topic>
+		</token>   
+		
+		<token value="produce_all" operation="produce,track_sub"> <!-- rpc = produce -->
+			<topic value="*"/>
+		</token>    
+		
+		<token value="myrpc_client" operation="produce, track_sub"> 
+			<topic value="MyRpc"/>
+		</token>   
+		
+		<token value="myrpc_service" operation="declare,track_sub,consume,route"> <!-- route required to reply -->
+			<topic value="MyRpc"/>
+		</token>  
+		
+		<token value="myrpc_all" operation="*"> 
+			<topic value="MyRpc"/>
+		</token>  
+		
+		<token value="tracker" operation="server, tracker, track_sub">
+			<topic value="MyTopic">	
+				<consumeGroup>Group1</consumeGroup> 
+			</topic>
+		</token>    
+		
+		<token value="track_pub_token" operation="track_pub"/>   
+		
+		<token value="rpc_service" operation="declare,track_sub,consume,route"> 
+			<topic value="*"/>
+		</token>  
+				
+	</auth>  
+	
+</zbus>
+

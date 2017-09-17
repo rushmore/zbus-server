@@ -1,9 +1,17 @@
 package io.zbus.transport;
 
-public class ServerAddress{
-	public String address;
+import java.io.IOException;
+
+import io.zbus.kit.FileKit;
+
+public class ServerAddress implements Cloneable {
+	public String address;  //<Host>:<Port>, default to 80 if port missing
 	public boolean sslEnabled;
-	public Server server; //InProc server
+	public transient String certificate;  //if ssl/tls enabled, certificate represents the string bytes of certificate file
+	
+	public transient Server server; //InProc server
+	
+	public transient String token;  //May need for authentication
 	
 	public ServerAddress(){
 		
@@ -15,6 +23,47 @@ public class ServerAddress{
 	public ServerAddress(String address, boolean sslEnabled) {
 		this.address = address;
 		this.sslEnabled = sslEnabled;
+	}  
+	
+	public ServerAddress(String address, String token) {
+		this.address = address;
+		this.token = token;
+	}  
+	
+	public String getAddress() {
+		return address;
+	}
+	public void setAddress(String address) {
+		this.address = address;
+	}
+	public boolean isSslEnabled() {
+		return sslEnabled;
+	}
+	public void setSslEnabled(boolean sslEnabled) {
+		this.sslEnabled = sslEnabled;
+	}
+	public String getCertificate() {
+		return certificate;
+	}
+	public void setCertificate(String certificate) {
+		this.certificate = certificate;
+	}
+	
+	public void setCertFile(String certFilePath) throws IOException{
+		this.certificate = FileKit.renderFile(certFilePath); 
+	}
+	
+	public Server getServer() {
+		return server;
+	}
+	public void setServer(Server server) {
+		this.server = server;
+	}
+	public String getToken() {
+		return token;
+	}
+	public void setToken(String token) {
+		this.token = token;
 	}
 	
 	@Override
@@ -58,5 +107,15 @@ public class ServerAddress{
 			return false;
 		return true;
 	}
-
+	
+	public ServerAddress clone(){
+		ServerAddress other = new ServerAddress();
+		other.address = address;
+		other.sslEnabled = sslEnabled;
+		other.certificate = certificate;
+		other.server = server;
+		other.token = token;
+		
+		return other;
+	} 
 }

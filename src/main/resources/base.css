@@ -21,9 +21,10 @@
 	top: 4px;
 }
 .topic {
-	margin: 3px;
+	margin: 3px; 
 	cursor: pointer;
 } 
+ 
 
 .filter-box{
 	float: right; 
@@ -171,13 +172,17 @@ input.topic-item{
 
 
 .sgroup tr>td:nth-child(1) {	
-	width: 16%; 
+	width: 25%; 
 }
 .sgroup tr>td:nth-child(2) {	
-	width: 14%;
+	width: 15%;
 }
 .sgroup tr>td:nth-child(3) {	
-	width: 70%;
+	width: 60%;
+}
+
+.sgroup td span {
+	margin-right: 4px;
 }
 
 
@@ -188,10 +193,10 @@ input.topic-item{
 	width: 20%;
 }
 .cgroup tr>td:nth-child(3) {	
-	width: 16%;
+	width: 10%;
 }
 .cgroup tr>td:nth-child(4) {	
-	width: 24%;
+	width: 30%;
 }
 .header-ctrl{
 	font-weight: bold;
@@ -231,4 +236,12 @@ td div.td {
 
 td div.num{
 	font-weight: bold;
+}
+
+.login input {
+	font-size: 16px;
+}
+
+.login .token{
+	width: 300px;
 }

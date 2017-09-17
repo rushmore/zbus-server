@@ -40,7 +40,8 @@ public class MqClient extends CompositeClient<Message, Message>{
 	 */
 	public MqClient(MqServer mqServer) {
 		ServerAddress serverAddress = new ServerAddress();
-		serverAddress.server = mqServer;
+		serverAddress.setServer(mqServer);
+		
 		buildSupport(serverAddress, null);
 	} 
 	
@@ -49,6 +50,7 @@ public class MqClient extends CompositeClient<Message, Message>{
 	}
 	
 	private void buildSupport(ServerAddress serverAddress, final EventLoop loop){
+		this.token = serverAddress.getToken();
 		if(serverAddress.server != null){
 			support = new InProcClient<Message, Message>(serverAddress.server);
 			return;
@@ -65,10 +67,10 @@ public class MqClient extends CompositeClient<Message, Message>{
 		
 		//default to TCP 
 		if(address.startsWith("tcp://")){
-			address.substring("tcp://".length());
+			serverAddress.address = address.substring("tcp://".length());
 		}
 			
-		TcpClient<Message, Message> tcp = new TcpClient<Message, Message>(address, loop);
+		TcpClient<Message, Message> tcp = new TcpClient<Message, Message>(serverAddress, loop);
 		support = tcp;
 		tcp.codec(new CodecInitializer() {
 			@Override
@@ -117,11 +119,11 @@ public class MqClient extends CompositeClient<Message, Message>{
 	public Message consume(String topic, String group) throws IOException, InterruptedException {
 		return consume(topic, group, null);
 	}
-	
+	 
 	public Message consume(String topic, String group, Integer window) throws IOException, InterruptedException {
 		Message msg = new Message();
 		msg.setCommand(Protocol.CONSUME);
-		msg.setTopic(topic); 
+		msg.setTopic(topic);
 		msg.setConsumeGroup(group);  
 		msg.setConsumeWindow(window); 
 		
@@ -129,18 +131,25 @@ public class MqClient extends CompositeClient<Message, Message>{
 		if (res == null) return res;
 		
 		res.setId(res.getOriginId());
-		res.removeHeader(Protocol.ORIGIN_ID);
-		if (res.getStatus() == 200){
-			String originUrl = res.getOriginUrl();
-			if(originUrl == null){
-				originUrl = "/";
-			} else {
-				res.removeHeader(Protocol.ORIGIN_URL);
-			}
-			res.setUrl(originUrl); 
-		}
+		res.removeHeader(Protocol.ORIGIN_ID); 
 		return res;
 	}  
+	
+	public Message unconsume(String topic) throws IOException, InterruptedException {
+		return unconsume(topic, null);
+	}
+	
+	public Message unconsume(String topic, String group) throws IOException, InterruptedException {
+		Message msg = new Message();
+		msg.setCommand(Protocol.UNCONSUME);
+		msg.setTopic(topic);
+		msg.setConsumeGroup(group);   
+		
+		Message res = invokeSync(msg, invokeTimeout);
+		res.setId(res.getOriginId());
+		res.removeHeader(Protocol.ORIGIN_ID); 
+		return res;
+	}
 	
 	public TrackerInfo queryTracker() throws IOException, InterruptedException{
 		Message msg = new Message();
@@ -156,6 +165,19 @@ public class MqClient extends CompositeClient<Message, Message>{
 		  
 		Message res = invokeSync(msg, invokeTimeout);
 		return parseResult(res, ServerInfo.class); 
+	}
+	
+	
+	public String querySslCertificate(String server) throws IOException, InterruptedException{
+		Message msg = new Message();
+		msg.setCommand(Protocol.SSL); 
+		msg.setHeader("server", server);
+		  
+		Message res = invokeSync(msg, invokeTimeout); 
+		if(res.getStatus() != 200){
+			return null;
+		}
+		return res.getBodyString();
 	}
 	
 	 
@@ -274,6 +296,7 @@ public class MqClient extends CompositeClient<Message, Message>{
 		if(msg.getToken() == null){
 			msg.setToken(this.token);
 		}
+		msg.setVersion(Protocol.VERSION_VALUE); //Set Version
 	}
 	
 	private void checkResult(Message msg){

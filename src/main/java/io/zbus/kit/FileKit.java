@@ -35,11 +35,13 @@ import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.lang.reflect.Method;
 import java.net.URL;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class FileKit { 
+public class FileKit {  
+	private final static Map<String, String> cache = new ConcurrentHashMap<String, String>();
+	private static boolean enableCache = true;
 	
 	public static InputStream inputStream(String filePath){
 		File file = new File(filePath);
@@ -52,40 +54,9 @@ public class FileKit {
 		} 
 		return FileKit.class.getClassLoader().getResourceAsStream(filePath);
 	}
+	 
 	
-	public static InputStream loadFile(String resource, Class<?> clazz) {
-		ClassLoader classLoader = null;
-		try {
-			Method method = Thread.class.getMethod("getContextClassLoader");
-			classLoader = (ClassLoader) method.invoke(Thread.currentThread());
-		} catch (Exception e) {
-			System.out.println("loadConfigFile error: ");
-			e.printStackTrace();
-		}
-		if (classLoader == null) {
-			classLoader = clazz.getClassLoader();
-		}
-		try {
-			if (classLoader != null) {
-				URL url = classLoader.getResource(resource);
-				if (url == null) {
-					System.out.println("Can not find resource:" + resource);
-					return null;
-				}
-				if (url.toString().startsWith("jar:file:")) {
-					return clazz.getResourceAsStream(resource.startsWith("/") ? resource : "/" + resource);
-				} else {
-					return new FileInputStream(new File(url.toURI()));
-				}
-			}
-		} catch (Exception e) {
-			System.out.println("loadConfigFile error: ");
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	public static InputStream loadFile(String resource) {
+	public static InputStream loadFile(String resource) throws IOException {
 		ClassLoader classLoader = null;
 		try {
 			Method method = Thread.class.getMethod("getContextClassLoader");
@@ -101,25 +72,30 @@ public class FileKit {
 			if (classLoader != null) {
 				URL url = classLoader.getResource(resource);
 				if (url == null) {
-					System.out.println("Can not find resource:" + resource);
-					return null;
+					throw new IOException("Can not find resource:" + resource);  
 				}
+				
 				if (url.toString().startsWith("jar:file:")) {
 					return FileKit.class.getResourceAsStream(resource.startsWith("/") ? resource : "/" + resource);
 				} else {
 					return new FileInputStream(new File(url.toURI()));
 				}
 			}
+			throw new IOException("Missing file: " + resource); 
 		} catch (Exception e) {
-			System.out.println("loadConfigFile error: ");
-			e.printStackTrace();
-		}
-		return null;
+			throw new IOException(e.getMessage(), e.getCause()); 
+		} 
 	}
 
-	public static String loadFileString(String resource) throws IOException {
+	public static String renderFile(String resource) throws IOException {
+		if(enableCache && cache.containsKey(resource)){
+			return cache.get(resource);
+		}
+		
 		InputStream in = FileKit.class.getClassLoader().getResourceAsStream(resource);
-		if (in == null) return null;
+		if (in == null) {
+			throw new IOException(resource + " not found");
+		}
 
 		Writer writer = new StringWriter();
 		char[] buffer = new char[1024];
@@ -130,19 +106,22 @@ public class FileKit {
 				writer.write(buffer, 0, n);
 			}
 		} catch (UnsupportedEncodingException e) { 
-			e.printStackTrace();
+			//ignore
 		} finally {
 			try {
 				in.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				//ignore
 			}
 		}
-		return writer.toString();
+		String content = writer.toString();
+		cache.put(resource, content);
+		return content;
 	}
+	 
 	
-	public static String loadTemplate(String resource, Map<String, Object> model) throws IOException {
-		String template = loadFileString(resource);
+	public static String renderFile(String resource, Map<String, Object> model) throws IOException {
+		String template = renderFile(resource);
 		if(model == null) return template; 
 		
 		for(Entry<String, Object> e : model.entrySet()){
@@ -153,25 +132,15 @@ public class FileKit {
 			if(val instanceof String){
 				val = "\"" + val + "\"";
 			}
+			if(val == null){
+				val = "";
+			}
 			template = template.replaceAll(key, val.toString()); 
 		}
 		
 		return template;
 	}
-	
-	public static Map<String, Object> parseKeyValuePairs(String params){
-		Map<String, Object> model = new HashMap<String, Object>();
-		String[] kvs = params.split("&&");
-		for(String kv : kvs){
-			kv = kv.trim();
-			String[] bb = kv.split("=");
-			if(bb.length < 2) continue;
-			String key = bb[0].trim();
-			String val = bb[1].trim();
-			model.put(key, val);
-		}
-		return model;
-	}
+	 
 	
 	public static byte[] loadFileBytes(String resource) throws IOException {
 		InputStream in = FileKit.class.getClassLoader().getResourceAsStream(resource);
@@ -208,5 +177,16 @@ public class FileKit {
 			} 
 			file.delete(); 
 		}  
+	}
+	
+	public static File classBaseDir(){
+		return classBaseDir(FileKit.class);
+	}
+	
+	public static File classBaseDir(Class<?> clazz){
+		if(clazz == null){
+			clazz = FileKit.class;
+		}
+		return new File(clazz.getProtectionDomain().getCodeSource().getLocation().getPath());
 	}
 }

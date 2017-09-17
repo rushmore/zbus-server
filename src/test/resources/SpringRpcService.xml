@@ -1,0 +1,27 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans-3.0.xsd"> 
+	
+	<bean class="io.zbus.examples.rpc.biz.InterfaceExampleImpl"></bean>
+	<bean class="io.zbus.examples.rpc.biz.generic.GenericMethodImpl"></bean> 
+	<bean class="io.zbus.examples.rpc.biz.inheritance.SubService1"></bean> 
+	<bean class="io.zbus.examples.rpc.biz.inheritance.SubService2"></bean> 
+	
+	
+	<bean class="io.zbus.rpc.bootstrap.SpringServiceBootstrap" init-method="start">
+		<property name="serviceName" value="MyRpc"/> 
+		<property name="serviceToken" value="myrpc_service"/> 
+		<property name="autoDiscover" value="true"/>  
+		<property name="port" value="15555"/> <!-- start server internally --> 
+		<!-- Connect to zbus server 
+		<property name="serviceAddress" value="localhost:15555"/>
+		 -->
+		
+		<!-- Enable SSL
+		<property name="sslCertFile" value="ssl/zbus.crt"/>
+		<property name="sslKeyFile" value="ssl/zbus.key"/>
+		 -->
+	</bean>
+	
+</beans>

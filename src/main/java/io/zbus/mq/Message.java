@@ -45,21 +45,23 @@ import static io.zbus.mq.Protocol.TOKEN;
 import static io.zbus.mq.Protocol.TOPIC;
 import static io.zbus.mq.Protocol.TOPIC_MASK;
 import static io.zbus.mq.Protocol.VERSION;
+
+import io.zbus.mq.server.Fix;
  
 
 public class Message extends io.zbus.transport.http.Message {    
 	
 	public Message() {
-		
 	}
 	
 	public Message(io.zbus.transport.http.Message raw){
-		super(raw);
+		super(raw); 
 	}
 	
 	public String getVersion(){
 		return this.getHeader(VERSION); 
 	} 
+	
 	public Message setVersion(String value) {
 		this.setHeader(VERSION, value);
 		return this;
@@ -124,28 +126,40 @@ public class Message extends io.zbus.transport.http.Message {
 	
 	public Integer getOriginStatus() {
 		String value = this.getHeader(ORIGIN_STATUS);
-		if(value == null) return null;
-		return Integer.valueOf(value);
+		if(value != null){
+			return Integer.valueOf(value);
+		}
+		
+		return Fix.getOriginStatus(this); 
 	} 
+	
 	public Message setOriginStatus(Integer value) {
 		this.setHeader(ORIGIN_STATUS, value);
+		Fix.setOriginStatus(this, value);
 		return this;
 	}  
 	
 	public String getOriginUrl() {
-		return this.getHeader(ORIGIN_URL);
+		String value = this.getHeader(ORIGIN_URL); 
+		if(value == null) value = Fix.getOriginUrl(this);    
+		return value;
 	} 
+	
 	public Message setOriginUrl(String value) {
 		this.setHeader(ORIGIN_URL, value);
+		Fix.setOriginUrl(this, value);
 		return this;
 	}   
 	
 	public String getOriginId() {
-		return this.getHeader(ORIGIN_ID);
+		String value = this.getHeader(ORIGIN_ID); 
+		if(value == null) value = Fix.getOriginId(this);  
+		return value;
 	} 
-	public Message setOriginId(String value) {
-		if(value == null) return this;
-		this.setHeader(ORIGIN_ID, value);
+	
+	public Message setOriginId(String value) { 
+		this.setHeader(ORIGIN_ID, value); 
+		Fix.setOriginId(this, value);
 		return this;
 	} 
 	
@@ -162,11 +176,13 @@ public class Message extends io.zbus.transport.http.Message {
 	} 
 	
 	public String getTopic(){
-		String value = this.getHeader(TOPIC);
-		return value;
+		String topic = getHeader(Protocol.TOPIC);
+		if(topic != null) return topic;
+		
+		return Fix.getTopic(this); 
 	} 
-	public Message setTopic(String mq) {
-		this.setHeader(TOPIC, mq);
+	public Message setTopic(String value) {
+		this.setHeader(TOPIC, value);
 		return this;
 	} 
 	
@@ -189,11 +205,13 @@ public class Message extends io.zbus.transport.http.Message {
 	} 
 	
 	public Integer getTopicMask(){
-		String value = this.getHeader(TOPIC_MASK);
-		if(value == null) return null;
-		return Integer.valueOf(value);
+		String value = getHeader(TOPIC_MASK);
+		if(value != null) return Integer.valueOf(value);
+		
+		return Fix.getTopicMask(this); 
 	} 
-	public Message setTopicMask(Integer value) {
+	
+	public Message setTopicMask(Integer value) { 
 		this.setHeader(TOPIC_MASK, value);
 		return this;
 	} 

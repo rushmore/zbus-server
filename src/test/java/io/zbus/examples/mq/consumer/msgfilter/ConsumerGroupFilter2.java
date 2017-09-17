@@ -21,7 +21,7 @@ public class ConsumerGroupFilter2 {
 		config.setTopic("MyTopic");        
 		ConsumeGroup group = new ConsumeGroup();
 		group.setGroupName("FilterGroup2");
-		group.setFilter("Stock.HK.*");  //Filter is ConsumeGroup wide, it influence other consumers on same ConsumeGroup
+		group.setFilter("Stock.HK.#");  //Filter is ConsumeGroup wide, it influence other consumers on same ConsumeGroup
 		
 		config.setConsumeGroup(group); 
 		

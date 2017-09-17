@@ -83,7 +83,7 @@ public class MessageAdaptor extends ServerAdaptor{
     	Message res = new Message();
     	res.setId(msgId); 
     	res.setStatus(404);
-    	String text = String.format("Not Found(404): Command(%s)", cmd);
+    	String text = String.format("404: Command(%s) Not Found", cmd);
     	res.setBody(text); 
     	sess.write(res); 
     }  

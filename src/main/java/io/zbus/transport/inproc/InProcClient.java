@@ -22,7 +22,7 @@ public class InProcClient<REQ extends Id, RES extends Id> extends AbstractClient
 	}
 	
 	public InProcClient(Server server) {
-		this.serverIoAdaptor = server.getIoAdatpr();
+		this.serverIoAdaptor = server.getIoAdaptor();
 	}
 
 	protected String serverAddress() {

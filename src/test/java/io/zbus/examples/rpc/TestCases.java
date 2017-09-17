@@ -5,10 +5,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import org.junit.Assert;
+
 import io.zbus.examples.rpc.biz.InterfaceExample;
 import io.zbus.examples.rpc.biz.MyEnum;
 import io.zbus.examples.rpc.biz.Order;
 import io.zbus.examples.rpc.biz.User;
+import io.zbus.examples.rpc.biz.generic.GenericMethod;
+import io.zbus.examples.rpc.biz.inheritance.SubServiceInterface1;
+import io.zbus.examples.rpc.biz.inheritance.SubServiceInterface2;
 import io.zbus.rpc.Request;
 import io.zbus.rpc.Response;
 import io.zbus.rpc.RpcInvoker;
@@ -46,6 +51,17 @@ public class TestCases {
 		
 	}
 	
+	public static void testGenericMethod(GenericMethod biz) throws Exception{ 
+		biz.test(10);
+	}
+	
+	public static void testInheritGeneric1(SubServiceInterface1 biz) {
+		biz.save(10);
+	}
+	
+	public static void testInheritGeneric2(SubServiceInterface2 biz) {
+		biz.save("hello world");
+	}
 	 
 	public static void testDynamicProxy(InterfaceExample biz) throws Exception{ 
 		
@@ -60,6 +76,8 @@ public class TestCases {
 		Object[] array = new Object[] { getUser("rushmore"), "hong", true, 1,
 				String.class };
 		
+		String encoding = biz.testEncoding();
+		Assert.assertEquals(encoding, "中文");
 		
 		int saved = biz.saveObjectArray(array);
 		System.out.println(saved);

@@ -15,6 +15,7 @@ import io.zbus.mq.Protocol.TrackerInfo;
 import io.zbus.transport.ServerAddress;
  
 public class BrokerRouteTable {    
+	private long lastUpdatedTime = System.currentTimeMillis();
 	private double voteFactor = 0.5;
 	//{ TrackerAddress=>[ServerAddress] }
 	private Map<ServerAddress, Vote> votesTable = new ConcurrentHashMap<ServerAddress, Vote>(); 
@@ -30,6 +31,7 @@ public class BrokerRouteTable {
 	}
 	
 	public List<ServerAddress> updateTracker(TrackerInfo trackerInfo){  
+		lastUpdatedTime = System.currentTimeMillis();
 		//1) Update Votes
 		Vote vote = votesTable.get(trackerInfo.serverAddress);
 		if(vote != null && vote.version >= trackerInfo.infoVersion){
@@ -60,6 +62,8 @@ public class BrokerRouteTable {
 	}
 	
 	public List<ServerAddress> removeTracker(ServerAddress trackerAddress){
+		lastUpdatedTime = System.currentTimeMillis();
+		
 		if(!votesTable.containsKey(trackerAddress)) {
 			return new ArrayList<ServerAddress>();
 		}
@@ -114,4 +118,8 @@ public class BrokerRouteTable {
 	public Map<String, Map<ServerAddress, TopicInfo>> topicTable(){
 		return this.topicTable;
 	} 
+	
+	public long getLastUpdatedTime() {
+		return lastUpdatedTime;
+	}
 }

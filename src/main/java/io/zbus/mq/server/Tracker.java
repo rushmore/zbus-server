@@ -3,9 +3,11 @@ package io.zbus.mq.server;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -22,53 +24,53 @@ import io.zbus.mq.Protocol;
 import io.zbus.mq.Protocol.ServerEvent;
 import io.zbus.mq.Protocol.ServerInfo;
 import io.zbus.mq.Protocol.TrackerInfo;
-import io.zbus.transport.EventLoop;
-import io.zbus.transport.ServerAddress;
-import io.zbus.transport.Session;
+import io.zbus.mq.server.auth.AuthProvider;
+import io.zbus.mq.server.auth.Token;
 import io.zbus.transport.Client.ConnectedHandler;
-import io.zbus.transport.Client.DisconnectedHandler; 
+import io.zbus.transport.Client.DisconnectedHandler;
+import io.zbus.transport.ServerAddress;
+import io.zbus.transport.Session; 
  
 
+/**
+ * Act as both TrackServer and TrackClient
+ * 
+ * @author rushmore
+ *
+ */
 public class Tracker implements Closeable{
 	private static final Logger log = LoggerFactory.getLogger(Tracker.class);  
-	 
-	private Map<ServerAddress, MqClient> downstreamTrackers = new ConcurrentHashMap<ServerAddress, MqClient>();  
-	private Map<ServerAddress, MqClient> healthyUpstreamTrackers = new ConcurrentHashMap<ServerAddress, MqClient>();
-	private Map<ServerAddress, MqClient> upstreamTrackers = new ConcurrentHashMap<ServerAddress, MqClient>();  
-	
-	private Map<String, ServerInfo> serverTable = new ConcurrentHashMap<String, ServerInfo>();  
-	
-	private Set<Session> subscribers = new HashSet<Session>();
-	
-	private MqServer mqServer;
-	private EventLoop loop; 
-	private final ServerAddress myServerAddress;
-	private boolean myServerInTrack; 
-	
-	private Map<String, String> sslCertFileTable;
 	
 	private AtomicLong infoVersion = new AtomicLong(System.currentTimeMillis());
 	
-	protected volatile ScheduledExecutorService heartbeator = Executors.newSingleThreadScheduledExecutor();
+	private Map<ServerAddress, MqClient> serversInTrack = new ConcurrentHashMap<ServerAddress, MqClient>();  
+	private Map<ServerAddress, MqClient> healthyTrackers = new ConcurrentHashMap<ServerAddress, MqClient>();
+	private Map<ServerAddress, MqClient> trackers = new ConcurrentHashMap<ServerAddress, MqClient>();  
+	private Set<Session> subscribedClients = new HashSet<Session>();
+	
+	private Map<String, ServerInfo> serverInfoTable = new ConcurrentHashMap<String, ServerInfo>();  
+	
+	private MqServer mqServer;  
+	private AuthProvider authProvider;
+	private ScheduledExecutorService reportToTracker = Executors.newSingleThreadScheduledExecutor();
 
 	
-	public Tracker(MqServer mqServer, Map<String, String> sslCertFileTable, boolean myServerInTrack, long trackReportIntervalMs){ 
-		this.mqServer = mqServer;
-		this.myServerAddress = this.mqServer.getServerAddress();
-		this.loop = this.mqServer.getEventLoop(); 
-		this.myServerInTrack = myServerInTrack; 
-		this.sslCertFileTable = sslCertFileTable;
+	public Tracker(final MqServer mqServer){ 
+		this.mqServer = mqServer;   
+		this.authProvider = mqServer.getConfig().getAuthProvider();
 		
-		this.heartbeator.scheduleAtFixedRate(new Runnable() {
+		long reportToTrackerInterval = mqServer.getConfig().getReportToTrackerInterval();
+		this.reportToTracker.scheduleAtFixedRate(new Runnable() {
 			public void run() {
 				try {
-				    for(MqClient client : upstreamTrackers.values()){ 
+				    for(MqClient client : trackers.values()){ 
 						try{
 							ServerEvent event = new ServerEvent();
-		    				event.serverInfo = serverInfo();
+							event.certificate = mqServer.getServerAddress().getCertificate();
+		    				event.serverInfo = mqServer.serverInfo();
 		    				event.live = true;
 		    				
-		    				notifyUpstream(client, event);
+		    				publishToTracker(client, event);
 						} catch (Exception e) {
 							log.error(e.getMessage(), e);
 						} 
@@ -77,42 +79,52 @@ public class Tracker implements Closeable{
 					log.warn(e.getMessage(), e);
 				}
 			}
-		}, trackReportIntervalMs, trackReportIntervalMs, TimeUnit.MILLISECONDS);
+		}, reportToTrackerInterval, reportToTrackerInterval, TimeUnit.MILLISECONDS);
 	} 
 	
-	public ServerInfo serverInfo(){
-		return mqServer.serverInfo();
-	}
-	
-	public List<ServerAddress> liveTrackerList(){
-		return new ArrayList<ServerAddress>(this.upstreamTrackers.keySet());
-	}
+	public ServerInfo serverInfo(Token token){
+		ServerInfo info = mqServer.serverInfo(); 
+		return Token.filter(info, token);
+	}   
 	 
-	public TrackerInfo trackerInfo(){  
-		List<ServerAddress> serverList = new ArrayList<ServerAddress>(this.downstreamTrackers.keySet()); 
-		if(myServerInTrack){
-			serverList.add(myServerAddress);
-			serverTable.put(myServerAddress.toString(), serverInfo());
+	public TrackerInfo trackerInfo(Token token){  
+		List<ServerAddress> serverList = new ArrayList<ServerAddress>(this.serversInTrack.keySet()); 
+		ServerAddress trackerAddress = mqServer.getServerAddress();
+		if(!mqServer.getConfig().isTrackerOnly()){
+			serverList.add(mqServer.getServerAddress());
+			serverInfoTable.put(trackerAddress.toString(), mqServer.serverInfo());
 		}
+		
 		TrackerInfo trackerInfo = new TrackerInfo(); 
 		trackerInfo.infoVersion = infoVersion.getAndIncrement();
-		trackerInfo.serverAddress = myServerAddress; 
-		trackerInfo.serverTable = serverTable; 
+		trackerInfo.serverAddress = trackerAddress;   
+		trackerInfo.serverTable = new HashMap<String, ServerInfo>(); 
+		for(Entry<String, ServerInfo> e : serverInfoTable.entrySet()){
+			ServerInfo serverInfo = e.getValue();
+			trackerInfo.serverTable.put(e.getKey(), Token.filter(serverInfo, token));
+		}  
 		
 		return trackerInfo;
 	}  
+	 
 	
-	public void joinUpstream(List<ServerAddress> trackerList){
+	public List<ServerAddress> trackerList(){
+		return new ArrayList<ServerAddress>(this.trackers.keySet());
+	}
+	
+	public void joinTracker(List<ServerAddress> trackerList){
 		if(trackerList == null || trackerList.isEmpty()) return; 
 		
     	for(final ServerAddress trackerAddress : trackerList){  
     		log.info("Connecting to Tracker(%s)", trackerAddress.toString());  
-    		final MqClient client = connectToServer(trackerAddress);  
+    		final MqClient client = new MqClient(trackerAddress, mqServer.getEventLoop());  
+    		client.attr("tracker", trackerAddress);
+    		
     		client.onDisconnected(new DisconnectedHandler() { 
 				@Override
 				public void onDisconnected() throws IOException { 
 					log.warn("Disconnected from Tracker(%s)", trackerAddress.address);
-					healthyUpstreamTrackers.remove(trackerAddress); 
+					healthyTrackers.remove(trackerAddress); 
 					try {
 						Thread.sleep(3000);
 					} catch (InterruptedException e) {
@@ -126,63 +138,44 @@ public class Tracker implements Closeable{
     			@Override
     			public void onConnected() throws IOException { 
     				log.info("Connected to Tracker(%s)", trackerAddress.address);
-    				healthyUpstreamTrackers.put(trackerAddress, client);
+    				healthyTrackers.put(trackerAddress, client);
     				ServerEvent event = new ServerEvent();
-    				event.serverInfo = serverInfo();
+    				event.serverInfo = mqServer.serverInfo();
+    				event.certificate = mqServer.getServerAddress().getCertificate();
     				event.live = true;
-    				notifyUpstream(client, event);
+    				
+    				publishToTracker(client, event);
     			}
 			});
-    		upstreamTrackers.put(trackerAddress, client);
+    		trackers.put(trackerAddress, client);
     		client.ensureConnectedAsync();
     	}  
-	}
+	}  
 	
-	private MqClient connectToServer(ServerAddress serverAddress){
-		EventLoop driver = loop.duplicate(); //duplicated, no need to close
-		if(serverAddress.sslEnabled){
-			String certPath = sslCertFileTable.get(serverAddress.address);
-			if(certPath != null){
-				driver.setClientSslContext(certPath);
-			}
+	public void serverInTrackUpdated(final ServerEvent event){  
+		final ServerAddress serverAddress = event.serverInfo.serverAddress.clone(); 
+		if(event.certificate != null){ //update certifcate of tracked server if SSL enabled
+			serverAddress.setCertificate(event.certificate);
+			mqServer.sslCertTable.put(serverAddress.getAddress(), event.certificate);
 		}
-		final MqClient client = new MqClient(serverAddress.address, driver);  
-		return client;
-	}
-	
-	private void notifyUpstream(MqClient client, ServerEvent event){ 
-		Message message = new Message();  
-		message.setCommand(Protocol.TRACK_PUB);
-		message.setJsonBody(JsonKit.toJSONString(event));  
-		message.setAck(false); 
 		
-		try {  
-			client.invokeAsync(message, null);
-		} catch (Exception ex) { 
-			log.error(ex.getMessage(), ex);
-		}    
-	} 
-	
-	
-	public void onDownstreamNotified(final ServerEvent event){  
-		final ServerAddress serverAddress = event.serverInfo.serverAddress;
-		if(myServerAddress.equals(serverAddress)){//myServer changes, just ignore
+		if(mqServer.getServerAddress().equals(serverAddress)){//myServer changes, just ignore
 			return;
 		}   
 		
 		if(event.live){
-			serverTable.put(serverAddress.toString(), event.serverInfo);
+			serverInfoTable.put(serverAddress.toString(), event.serverInfo);
 		}
 		
-		if(event.live && !downstreamTrackers.containsKey(serverAddress)){ //new downstream tracker
-			final MqClient client = connectToServer(serverAddress);  
+		if(event.live && !serversInTrack.containsKey(serverAddress)){ //new downstream tracker
+			final MqClient client = new MqClient(serverAddress, mqServer.getEventLoop());  
     		client.onDisconnected(new DisconnectedHandler() { 
 				@Override
 				public void onDisconnected() throws IOException { 
 					log.warn("Server(%s) lost of tracking", serverAddress);
-					downstreamTrackers.remove(serverAddress); 
-					serverTable.remove(serverAddress.toString());
-					publishToSubscribers();   
+					serversInTrack.remove(serverAddress); 
+					serverInfoTable.remove(serverAddress.toString());
+					publishToClient();   
     			}  
 			});
     		
@@ -190,12 +183,12 @@ public class Tracker implements Closeable{
     			@Override
     			public void onConnected() throws IOException { 
     				log.info("Server(%s) in track", serverAddress);
-    				downstreamTrackers.put(serverAddress, client);  
-					publishToSubscribers();   
+    				serversInTrack.put(serverAddress, client);  
+					publishToClient();   
     			}
 			});
     		try{
-    			downstreamTrackers.put(serverAddress, client);
+    			serversInTrack.put(serverAddress, client);
     			client.connectAsync();  //TODO handle failed connections
     		}catch (Exception e) {
 				log.error(e.getMessage(), e); 
@@ -204,8 +197,8 @@ public class Tracker implements Closeable{
 		}
 		
 		if(!event.live){ //server down
-			serverTable.remove(serverAddress.toString());
-			MqClient downstreamTracker = downstreamTrackers.remove(serverAddress);
+			serverInfoTable.remove(serverAddress.toString());
+			MqClient downstreamTracker = serversInTrack.remove(serverAddress);
 			if(downstreamTracker != null){
 				try {
 					downstreamTracker.close();
@@ -215,29 +208,50 @@ public class Tracker implements Closeable{
 			} 
 		}  
 		
-		publishToSubscribers();  
+		publishToClient();  
 	}
+	
+	private void publishToTracker(MqClient client, ServerEvent event){  
+		Message message = new Message();  
+		message.setCommand(Protocol.TRACK_PUB);
+		message.setJsonBody(JsonKit.toJSONString(event));  
+		message.setAck(false); 
+		
+		ServerAddress trackerAddress = client.attr("tracker");
+		if(trackerAddress != null){
+			message.setToken(trackerAddress.getToken());
+		}
+		
+		try {  
+			client.invokeAsync(message, null);
+		} catch (Exception ex) { 
+			log.error(ex.getMessage(), ex);
+		}    
+	} 
 	
 	public void myServerChanged() {
 		ServerEvent event = new ServerEvent();
-		event.serverInfo = serverInfo();
+		event.serverInfo = mqServer.serverInfo();
+		event.certificate = mqServer.getServerAddress().getCertificate();
 		event.live = true;
 		
-		for(MqClient tracker : healthyUpstreamTrackers.values()){
+		for(MqClient tracker : healthyTrackers.values()){
 			try{
-				notifyUpstream(tracker, event);
+				publishToTracker(tracker, event);
 			} catch (Exception e) {
 				log.error(e.getMessage(), e);
 			}
 		}  
-		publishToSubscribers();   
+		publishToClient();   
 	}
 	 
 	 
-	public void subscribe(Message msg, Session session){
-		subscribers.add(session);  
+	public void clientSubcribe(Message msg, Session session){
+		subscribedClients.add(session); 
+		Token token = authProvider.getToken(msg.getToken()); 
+		session.attr("token", token);
 		
-		Message message = trackerInfoPubMessage();
+		Message message = trackerInfoPubMessage(token);
 		try {  
 			session.write(message);
 		} catch (Exception ex) { 
@@ -245,47 +259,46 @@ public class Tracker implements Closeable{
 		}   
 	}  
 	 
-	public void publishToSubscribers(){
-		if(subscribers.isEmpty()) return;
+	public void publishToClient(){
+		if(subscribedClients.isEmpty()) return; 
 		
-		Message message = trackerInfoPubMessage();
-		for(Session session : subscribers){
+		for(Session session : subscribedClients){
 			try{
+				Token token = session.attr("token");
+				Message message = trackerInfoPubMessage(token); 
 				session.write(message);
 			} catch (Exception e) { 
 				log.error(e.getMessage(), e);
-				subscribers.remove(session);
+				subscribedClients.remove(session);
 			}
 		}
 	} 
 	
-	private Message trackerInfoPubMessage(){
+	private Message trackerInfoPubMessage(Token token){
 		Message message = new Message();  
 		message.setCommand(Protocol.TRACK_PUB);
-		message.setJsonBody(JsonKit.toJSONString(trackerInfo()));
+		message.setJsonBody(JsonKit.toJSONString(trackerInfo(token))); 
 		message.setStatus(200);// server to client
 		return message;
 	}
 	
-	public void cleanSubscriberSession(Session session){
-		if(subscribers.contains(session)){
-			subscribers.remove(session);
+	public void cleanSession(Session session){
+		if(subscribedClients.contains(session)){
+			subscribedClients.remove(session);
 		}
 	} 
 	
 	@Override
 	public void close() throws IOException {
-		this.heartbeator.shutdown();
-		for(MqClient client : upstreamTrackers.values()){
+		this.reportToTracker.shutdown();
+		for(MqClient client : trackers.values()){
 			client.close();
 		}
-		upstreamTrackers.clear();
-		for(MqClient client : downstreamTrackers.values()){
+		trackers.clear();
+		for(MqClient client : serversInTrack.values()){
 			client.close();
 		}
-		downstreamTrackers.clear(); 
-		subscribers.clear(); //No need to close
-		
-		loop.close(); //duplicated, ok to close
+		serversInTrack.clear(); 
+		subscribedClients.clear(); //No need to close 
 	} 
 }

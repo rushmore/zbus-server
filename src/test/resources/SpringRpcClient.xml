@@ -1,0 +1,16 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">  
+	
+	<bean id="bootstrap" class="io.zbus.rpc.bootstrap.SpringClientBootstrap">
+		<property name="serviceAddress" value="localhost:15555"/>
+		<property name="serviceName" value="MyRpc"/> 
+		<property name="serviceToken" value="myrpc_service"/> 
+	</bean>
+	
+	<bean factory-bean="bootstrap" factory-method="createProxy">
+		<constructor-arg type="java.lang.Class" value="io.zbus.examples.rpc.biz.InterfaceExample"/> 
+	</bean> 
+	
+</beans>

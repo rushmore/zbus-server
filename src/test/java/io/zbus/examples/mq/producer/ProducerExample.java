@@ -9,11 +9,11 @@ public class ProducerExample {
 		Broker broker = new Broker("localhost:15555"); 
 		  
 		Producer p = new Producer(broker);
-		p.declareTopic("MyTopic"); 
+		p.declareTopic("MyMQ"); 
 		 
 		Message msg = new Message();
-		msg.setTopic("MyTopic");
-		//msg.setTag("group1.xxx");
+		msg.setTopic("MyMQ");
+		//msg.setTag("oo.account.pp");
 		msg.setBody("hello " + System.currentTimeMillis()); 
 		
 		Message res = p.publish(msg);

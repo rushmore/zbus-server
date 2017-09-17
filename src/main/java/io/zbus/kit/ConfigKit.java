@@ -22,10 +22,17 @@
  */
 package io.zbus.kit;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.w3c.dom.Document;
+import org.xml.sax.InputSource;
 
 public class ConfigKit {    
 	
@@ -123,4 +130,37 @@ public class ConfigKit {
 		return Boolean.valueOf(value);
 	}   
 	
+
+	public static abstract class XmlConfig {   
+		
+		public abstract void loadFromXml(Document doc) throws Exception;
+	
+		public void loadFromXml(InputStream stream) throws Exception { 
+			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+			DocumentBuilder db = dbf.newDocumentBuilder();
+			InputSource source = new InputSource(stream); 
+			Document doc = db.parse(source); 
+			loadFromXml(doc);
+		}
+		 
+		public void loadFromXml(String configFile) { 
+			InputStream stream = FileKit.inputStream(configFile);
+			if(stream == null){
+				throw new IllegalArgumentException(configFile + " not found");
+			}
+			try { 
+				loadFromXml(stream); 
+			} catch (Exception e) { 
+				throw new IllegalArgumentException(configFile + " load error", e);
+			} finally {
+				if(stream != null){
+					try {
+						stream.close();
+					} catch (IOException e) {
+						//ignore
+					}
+				}
+			}
+		} 
+	}
 }

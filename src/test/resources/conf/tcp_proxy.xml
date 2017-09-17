@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zbus> <!-- zbus prefix, made easy to use one configuration file -->
+
+	<tcpProxy>  
+		<server>0.0.0.0:80</server>
+		<target>localhost:15555</target>
+		<connectTimeout>3000</connectTimeout>
+		<idleTimeout>60000</idleTimeout> 
+	</tcpProxy>
+	
+</zbus>
+

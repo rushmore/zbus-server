@@ -86,7 +86,11 @@ public class TcpServer implements Server {
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
 				if(future.isSuccess()){
-					log.info("Server(%s:%d) started", host, port);
+					if(loop.isSslEnabled()){
+						log.info("Server([SSL]%s:%d) started", host, port);
+					} else {
+						log.info("Server(%s:%d) started", host, port);
+					} 
 				} else { 
 					String message = String.format("Server(%s:%d) failed to start", host, port);
 					throw new IOException(message, future.cause());
@@ -129,7 +133,7 @@ public class TcpServer implements Server {
 	} 
 	
 	@Override
-	public IoAdaptor getIoAdatpr() { 
+	public IoAdaptor getIoAdaptor() { 
 		return this.defaultIoAdaptor;
 	}
 	

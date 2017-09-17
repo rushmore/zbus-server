@@ -1,8 +1,11 @@
 package io.zbus.mq;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.zbus.mq.Broker.ServerSelector;
 import io.zbus.mq.Protocol.TopicInfo;
@@ -71,8 +74,17 @@ public class Producer extends MqAdmin{
 
 
 	public class DefaultProduceServerSelector implements ServerSelector{ 
+		private long lastUpdatedTime = 0;
+		private Map<String, List<TopicInfo>> cache = new ConcurrentHashMap<String, List<TopicInfo>>();
+		private int roundRobinIndex = 0;
+		
 		@Override
-		public ServerAddress[] select(BrokerRouteTable table, Message message) { 
+		public ServerAddress[] select(BrokerRouteTable table, Message message) {  
+			if(table.getLastUpdatedTime() > lastUpdatedTime){
+				cache.clear(); 
+				lastUpdatedTime = table.getLastUpdatedTime();
+			}
+			
 			int serverCount = table.serverTable().size();
 			if (serverCount == 0) {
 				return new ServerAddress[0];
@@ -80,22 +92,45 @@ public class Producer extends MqAdmin{
 			String topic = message.getTopic();
 			if(topic == null){
 				return new ServerAddress[0];
-			}
+			} 
+			
+			List<TopicInfo> targetServers = cache.get(topic);
+			if(targetServers != null && !targetServers.isEmpty()){
+				++roundRobinIndex;
+				roundRobinIndex %= targetServers.size();
+				TopicInfo target = targetServers.get(roundRobinIndex); 
+				return new ServerAddress[]{target.serverAddress};
+			} 
+			
 			Map<ServerAddress, TopicInfo> topicServerTable = table.topicTable().get(topic);
 			if (topicServerTable == null || topicServerTable.size() == 0) {
 				return new ServerAddress[0];
 			} 
+			List<TopicInfo> topicInfoList = new ArrayList<TopicInfo>();
 			TopicInfo target = null;
 			for(Entry<ServerAddress, TopicInfo> e : topicServerTable.entrySet()){
+				
 				TopicInfo current = e.getValue();
+				if(current.consumerCount > 0){
+					topicInfoList.add(current);
+				}
+				
 				if(target == null){
 					target = current;
 					continue;
-				} 
+				}  
+				
 				if (target.consumerCount < current.consumerCount) { //consumer count decides
-					target = current;
+					target = current; 
+				} else if(target.consumerCount == current.consumerCount){
+					if(target.messageDepth > current.messageDepth){
+						target = current;
+					}
 				}
 			} 
+			if(topicInfoList.size() > 0){
+				cache.put(topic, topicInfoList);
+			}
 			return new ServerAddress[]{target.serverAddress};
 		} 
 	} 

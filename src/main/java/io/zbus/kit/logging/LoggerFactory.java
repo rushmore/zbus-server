@@ -56,16 +56,6 @@ public class LoggerFactory {
 		}
 		
 		try {
-			//default to Log4j
-			Class.forName("org.apache.log4j.Logger");
-			String defaultFactory = String.format("%s.impl.Log4jLoggerFactory", Logger.class.getPackage().getName());
-			Class<?> factoryClass = Class.forName(defaultFactory);
-			factory = (InternalLoggerFactory)factoryClass.newInstance();
-			return;
-		} catch (Exception e) {  
-		}
-		
-		try {
 			//try slf4j
 			Class.forName("org.slf4j.Logger");
 			String defaultFactory = String.format("%s.impl.Sl4jLoggerFactory", Logger.class.getPackage().getName());
@@ -74,6 +64,16 @@ public class LoggerFactory {
 			return;
 		} catch (Exception e) { 
 		} 
+		
+		try {
+			//default to Log4j
+			Class.forName("org.apache.log4j.Logger");
+			String defaultFactory = String.format("%s.impl.Log4jLoggerFactory", Logger.class.getPackage().getName());
+			Class<?> factoryClass = Class.forName(defaultFactory);
+			factory = (InternalLoggerFactory)factoryClass.newInstance();
+			return;
+		} catch (Exception e) {  
+		}  
 		
 		if(factory == null){
 			factory = new JdkLoggerFactory();

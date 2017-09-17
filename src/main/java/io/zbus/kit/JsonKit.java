@@ -4,6 +4,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.Map;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONException;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.JSONSerializer;
 import com.alibaba.fastjson.serializer.SerializeWriter;
@@ -17,7 +18,12 @@ public class JsonKit {
 	} 
 	
 	public static <T> T parseObject(String jsonString, Class<T> clazz) {
-		return JSON.parseObject(jsonString, clazz);
+		try{
+			return JSON.parseObject(jsonString, clazz);
+		} catch (JSONException e) {
+			jsonString = jsonString.replace("@type", "@typeUnknown");
+			return JSON.parseObject(jsonString, clazz);
+		}
 	} 
 	
 	@SuppressWarnings("unchecked")
@@ -43,6 +49,15 @@ public class JsonKit {
 	
 	public static String toJSONString(Object value, String encoding) {
 		byte[] data = toJSONBytes(value, encoding);
+		try {
+			return new String(data, encoding);
+		} catch (UnsupportedEncodingException e) {
+			return new String(data);
+		}
+	}
+	
+	public static String toJSONStringWithTykpe(Object value, String encoding) {
+		byte[] data = toJSONBytesWithType(value, encoding);
 		try {
 			return new String(data, encoding);
 		} catch (UnsupportedEncodingException e) {

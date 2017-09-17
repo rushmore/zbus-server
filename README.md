@@ -24,19 +24,19 @@ zbus carefully designed on its protocol and components to embrace KISS(Keep It S
 
 ## Clients
 
-[zbus-java](https://github.com/rushmore/zbus)
+[zbus-java](https://gitee.com/rushmore/zbus)
 
-[zbus-dotnet](https://github.com/rushmore/zbus-dotnet)
+[zbus-dotnet](https://gitee.com/rushmore/zbus-dotnet)
 
-[zbus-javascript](https://github.com/rushmore/zbus-javascript)
+[zbus-javascript](https://gitee.com/rushmore/zbus-javascript)
 
-[zbus-python](https://github.com/rushmore/zbus-python)
+[zbus-python](https://gitee.com/rushmore/zbus-python)
 
-[zbus-php](https://github.com/rushmore/zbus-php)
+[zbus-php](https://gitee.com/rushmore/zbus-php)
 
-[zbus-cpp](https://github.com/rushmore/zbus-cpp)
+[zbus-cpp](https://gitee.com/rushmore/zbus-cpp)
 
-[zbus-go](https://github.com/rushmore/zbus-go)
+[zbus-go](https://gitee.com/rushmore/zbus-go)
 
 
 ## Getting started 
@@ -52,7 +52,7 @@ Maven
 	<dependency>
 		<groupId>io.zbus</groupId>
 		<artifactId>zbus</artifactId>
-		<version>0.9.0-SNAPSHOT</version>
+		<version>0.9.0</version>
 	</dependency>
 
 ## Performance
@@ -68,7 +68,7 @@ Fast performance test (Apache Benchmark)
 	Single Mac i7 box with SSD 
 	Produce:  ~80,000/s
 	Consume:  ~90,000/s
-	RPC: ~20,000/s
+	RPC InProc: ~60,000/s
 
 
 

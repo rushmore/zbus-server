@@ -18,6 +18,7 @@ public class MessageServerExample {
 		adaptor.url("/", new MessageHandler<Message>() { 
 			@Override
 			public void handle(Message msg, Session session) throws IOException {  
+				System.out.println(msg);
 				Message res = new Message();
 				res.setId(msg.getId()); //match the ID for response
 				res.setStatus(200);

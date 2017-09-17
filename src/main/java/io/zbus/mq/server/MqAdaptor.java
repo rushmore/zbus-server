@@ -5,29 +5,36 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringTokenizer;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
+import io.netty.handler.codec.http.cookie.Cookie;
+import io.netty.handler.codec.http.cookie.DefaultCookie;
+import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 import io.zbus.kit.FileKit;
 import io.zbus.kit.JsonKit;
 import io.zbus.kit.StrKit;
+import io.zbus.kit.StrKit.UrlInfo;
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.ConsumeGroup;
 import io.zbus.mq.DiskQueue;
+import io.zbus.mq.MemoryQueue;
 import io.zbus.mq.Message;
 import io.zbus.mq.MessageQueue;
 import io.zbus.mq.Protocol;
 import io.zbus.mq.Protocol.ConsumeGroupInfo;
 import io.zbus.mq.Protocol.ServerEvent;
+import io.zbus.mq.Protocol.ServerInfo;
 import io.zbus.mq.Protocol.TopicInfo;
 import io.zbus.mq.disk.DiskMessage;
+import io.zbus.mq.server.auth.AuthProvider;
+import io.zbus.mq.server.auth.Token;
 import io.zbus.rpc.Request;
 import io.zbus.transport.MessageHandler;
 import io.zbus.transport.ServerAdaptor;
@@ -38,40 +45,50 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 
 	private final Map<String, MessageQueue> mqTable; 
 	private final Map<String, MessageHandler<Message>> handlerMap = new ConcurrentHashMap<String, MessageHandler<Message>>();
-	
 	private boolean verbose = false;    
 	private final MqServer mqServer;
 	private final MqServerConfig config;    
 	private final Tracker tracker; 
+	private AuthProvider authProvider;
 	
 	private ScheduledThreadPoolExecutor timer = new ScheduledThreadPoolExecutor(16);
-	private Set<String> restUrlCommands = new HashSet<String>(); 
+	private Set<String> groupOptionalCommands = new HashSet<String>(); 
+	private Set<String> exemptAuthCommands = new HashSet<String>(); 
  
 	public MqAdaptor(MqServer mqServer){
 		super(mqServer.getSessionTable());
 		
 		this.config = mqServer.getConfig();
+		this.authProvider = this.config.getAuthProvider();
 		
-		this.mqServer = mqServer; 
+		this.mqServer = mqServer;  
 		this.mqTable = mqServer.getMqTable();  
 		this.tracker = mqServer.getTracker(); 
+		 
+		groupOptionalCommands.add(Protocol.CONSUME);
+		groupOptionalCommands.add(Protocol.DECLARE);
+		groupOptionalCommands.add(Protocol.QUERY);
+		groupOptionalCommands.add(Protocol.REMOVE); 
+		groupOptionalCommands.add(Protocol.EMPTY);
 		
-		restUrlCommands.add(Protocol.PRODUCE);
-		restUrlCommands.add(Protocol.CONSUME);
-		restUrlCommands.add(Protocol.DECLARE);
-		restUrlCommands.add(Protocol.QUERY);
-		restUrlCommands.add(Protocol.REMOVE); 
-		restUrlCommands.add(Protocol.EMPTY);
+		exemptAuthCommands.add(Protocol.HEARTBEAT);
+		exemptAuthCommands.add(Protocol.JS);
+		exemptAuthCommands.add(Protocol.CSS);
+		exemptAuthCommands.add(Protocol.IMG);
+		exemptAuthCommands.add(Protocol.LOGIN);
+		exemptAuthCommands.add(Protocol.LOGOUT);
+		exemptAuthCommands.add(Protocol.PAGE); 
+		exemptAuthCommands.add("favicon.ico"); 
 		
 		
 		//Produce/Consume
 		registerHandler(Protocol.PRODUCE, produceHandler); 
 		registerHandler(Protocol.CONSUME, consumeHandler);  
-		registerHandler(Protocol.ROUTE, routeHandler); 
-		registerHandler(Protocol.RPC, rpcHandler);
+		registerHandler(Protocol.ROUTE, routeHandler);  
+		registerHandler(Protocol.UNCONSUME, unconsumeHandler); 
 		
 		//Topic/ConsumerGroup 
-		registerHandler(Protocol.DECLARE, declareHandler); 
+		registerHandler(Protocol.DECLARE, declareHandler);  
 		registerHandler(Protocol.QUERY, queryHandler);
 		registerHandler(Protocol.REMOVE, removeHandler); 
 		
@@ -82,76 +99,83 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 		
 		registerHandler(Protocol.SERVER, serverHandler); 
 		
+		registerHandler(Protocol.SSL, sslHandler); 
+		
 		
 		//Monitor/Management
-		registerHandler("", homeHandler);  
+		registerHandler(Protocol.HOME, homeHandler);  
+		registerHandler("favicon.ico", faviconHandler);
+		
+		registerHandler(Protocol.LOGIN, loginHandler);  
+		registerHandler(Protocol.LOGOUT, logoutHandler);  
 		registerHandler(Protocol.JS, jsHandler); 
 		registerHandler(Protocol.CSS, cssHandler);
-		registerHandler(Protocol.IMG, imgHandler);
-		registerHandler("favicon.ico", faviconHandler);
+		registerHandler(Protocol.IMG, imgHandler); 
 		registerHandler(Protocol.PAGE, pageHandler);
 		registerHandler(Protocol.PING, pingHandler);   
 		
 		registerHandler(Message.HEARTBEAT, heartbeatHandler);    
 		
+		
+		if(Fix.Enabled){
+			//Compatible to older zbus
+			registerHandler(Fix.CreateMQ, declareHandler); 
+			registerHandler(Fix.QueryMQ, queryHandler); 
+			registerHandler(Fix.RemoveMQ, removeHandler); 
+		} 
 	}   
 	
 	private MessageHandler<Message> produceHandler = new MessageHandler<Message>() { 
 		@Override
 		public void handle(final Message msg, final Session sess) throws IOException {  
 			boolean ok = validateMessage(msg,sess);
-			if(!ok) return;
-			
-			if(!auth(msg)){ 
-				ReplyKit.reply403(msg, sess);
-				return;
-			}
+			if(!ok) return; 
 			
 			final MessageQueue mq = findMQ(msg, sess);
 			if(mq == null) return; 
 			
-			if((mq.getMask()&Protocol.MASK_RPC) != 0){ 
-				if(mq.consumerCount(null) == 0){ //default consumerGroup
-					ReplyKit.reply502(msg, sess);
-					return;
-				}
+			int mask = mq.getMask() & (Protocol.MASK_RPC | Protocol.MASK_PROXY);  
+			boolean ack = msg.isAck();  
+			if(mask != 0){
+				ack = false;
 			} 
 			
-			final boolean ack = msg.isAck();  
 			msg.removeHeader(Protocol.COMMAND);
 			msg.removeHeader(Protocol.ACK);  
+			msg.removeHeader(Protocol.TOKEN);
 			mq.produce(msg);  
 			
 			if(ack){
 				ReplyKit.reply200(msg, sess);
 			}
 		}
-	}; 
-	
-	private MessageHandler<Message> rpcHandler = new MessageHandler<Message>() { 
-		@Override
-		public void handle(final Message msg, final Session sess) throws IOException {  
-			msg.setAck(false);
-			produceHandler.handle(msg, sess);
-		}
-	};
+	};  
 	
 	private MessageHandler<Message> consumeHandler = new MessageHandler<Message>() { 
 		@Override
-		public void handle(Message msg, Session sess) throws IOException { 
-			if(!auth(msg)){ 
-				ReplyKit.reply403(msg, sess);
-				return;
-			}
-			
+		public void handle(Message msg, Session sess) throws IOException {  
 			MessageQueue mq = findMQ(msg, sess);
 			if(mq == null) return; 
 			
 			mq.consume(msg, sess);  
 			String topic = sess.attr(Protocol.TOPIC);
 			if(!msg.getTopic().equalsIgnoreCase(topic)){
-				sess.attr(Protocol.TOPIC, mq.getTopic()); //mark
+				sess.attr(Protocol.TOPIC, mq.topic()); //mark
 				
+				tracker.myServerChanged(); 
+			} 
+		}
+	}; 
+	
+	private MessageHandler<Message> unconsumeHandler = new MessageHandler<Message>() { 
+		@Override
+		public void handle(Message msg, Session sess) throws IOException {  
+			MessageQueue mq = findMQ(msg, sess);
+			if(mq == null) return; 
+			
+			mq.unconsume(msg, sess);  
+			String topic = sess.attr(Protocol.TOPIC);
+			if(msg.getTopic().equalsIgnoreCase(topic)){ 
 				tracker.myServerChanged(); 
 			} 
 		}
@@ -192,45 +216,46 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 	private MessageHandler<Message> declareHandler = new MessageHandler<Message>() {  
 		@Override
 		public void handle(Message msg, Session sess) throws IOException { 
-			String topic = msg.getTopic();  
+			String topic = msg.getTopic();    
+			
 			if(StrKit.isEmpty(topic)){ 
 				ReplyKit.reply400(msg, sess, "Missing topic");
 				return;
 			}
-			topic = topic.trim(); 
-			if(!auth(msg)){ 
-				ReplyKit.reply403(msg, sess);
-				return;
-			}   
-			  
-			
+			topic = topic.trim();  
+			Integer topicMask = msg.getTopicMask();  
     		MessageQueue mq = null;
     		synchronized (mqTable) {
     			mq = mqTable.get(topic);  
     			if(mq == null){ 
-	    			mq = new DiskQueue(new File(config.storePath, topic));  
+    				if(topicMask != null && (topicMask&Protocol.MASK_MEMORY) != 0){
+    					mq = new MemoryQueue(topic);
+    				} else {
+    					mq = new DiskQueue(new File(config.getMqPath(), topic));  
+    				} 
 	    			mq.setCreator(msg.getToken()); 
 	    			mqTable.put(topic, mq);
 	    			log.info("MQ Created: %s", mq);
     			}
     		} 
 			
-			try {
-				Integer topicMask = msg.getTopicMask();   
+			try { 
 				if(topicMask != null){
 					mq.setMask(topicMask);
 				}
 				
-				String groupName = msg.getConsumeGroup();
-				ConsumeGroup consumeGroup = new ConsumeGroup(msg);  
-				ConsumeGroupInfo info = mq.declareGroup(consumeGroup); 
-				
-				if(groupName != null){  
-					ReplyKit.replyJson(msg, sess, info);
-					log.info("ConsumeGroup declared: %s", consumeGroup); 
+				String groupName = msg.getConsumeGroup();  
+				if(groupName != null){   
+					ConsumeGroup consumeGroup = new ConsumeGroup(msg);  
+					ConsumeGroupInfo info = mq.declareGroup(consumeGroup); 
+					ReplyKit.replyJson(msg, sess, info); 
 				} else { 
-					TopicInfo topicInfo = mq.getInfo();
-			    	topicInfo.serverAddress = mqServer.getServerAddress(); 
+					if(mq.groupInfo(topic) == null){
+						ConsumeGroup consumeGroup = new ConsumeGroup(msg);  
+						mq.declareGroup(consumeGroup); 
+					}
+					TopicInfo topicInfo = mq.topicInfo();
+			    	topicInfo.serverAddress = mqServer.getServerAddress();  
 					ReplyKit.replyJson(msg, sess, topicInfo);
 				}  
 				
@@ -245,8 +270,16 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 	
 	private MessageHandler<Message> queryHandler = new MessageHandler<Message>() {
 		public void handle(Message msg, Session sess) throws IOException { 
-			if(msg.getTopic() == null){  
-				ReplyKit.replyJson(msg, sess, mqServer.serverInfo()); 
+			Token token = authProvider.getToken(msg.getToken());
+			if(msg.getTopic() == null){   
+				ServerInfo info = mqServer.serverInfo();
+				info = Token.filter(info, token);
+				if(info == null){
+					ReplyKit.reply404(msg, sess);
+				} else {
+					ReplyKit.replyJson(msg, sess, tracker.serverInfo(token));
+				}
+				
 				return;
 			} 
 			
@@ -255,12 +288,17 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 	    		ReplyKit.reply404(msg, sess);
 				return;
 			}
-	    	TopicInfo topicInfo = mq.getInfo();
+	    	TopicInfo topicInfo = mq.topicInfo();
 	    	topicInfo.serverAddress = mqServer.getServerAddress(); 
 	    	
 			String group = msg.getConsumeGroup();
 			if(group == null){
-				ReplyKit.replyJson(msg, sess, topicInfo);
+				topicInfo = Token.filter(topicInfo, token);
+				if(topicInfo == null){
+					ReplyKit.reply404(msg, sess);
+				} else {
+					ReplyKit.replyJson(msg, sess, topicInfo);
+				}
 				return;
 			}
 	    	
@@ -282,13 +320,7 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 				ReplyKit.reply400(msg, sess, "Missing topic");
 				return;
 			} 
-			topic = topic.trim(); 
-			
-			if(!auth(msg)){ 
-				ReplyKit.reply403(msg, sess);
-				return;
-			} 
-			
+			topic = topic.trim();   
 			MessageQueue mq = mqTable.get(topic);
 			if(mq == null){ 
 				ReplyKit.reply404(msg, sess);
@@ -307,9 +339,9 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 				return;
 			}  
 			
-			mq = mqTable.remove(mq.getTopic());
+			mq = mqTable.remove(mq.topic());
 			if(mq != null){
-				mq.removeTopic();
+				mq.destroy();
 				tracker.myServerChanged(); 
 				ReplyKit.reply200(msg, sess);
 			} else {
@@ -330,40 +362,77 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 	 	 
 	
 	private MessageHandler<Message> homeHandler = new MessageHandler<Message>() {
-		public void handle(Message msg, Session sess) throws IOException {
-			String msgId = msg.getId();
-			msg = new Message();
-			msg.setStatus(200);
-			msg.setId(msgId);
-			msg.setHeader("content-type", "text/html");
-			String body = FileKit.loadFileString("home.htm");
-			if ("".equals(body)) {
-				body = "<strong>zbus.htm file missing</strong>";
+		public void handle(Message msg, Session sess) throws IOException {  
+			String tokenStr = msg.getToken();
+			Token token = authProvider.getToken(tokenStr);
+			Map<String, Object> model = new HashMap<String, Object>();
+			String tokenShow = null;
+			if(token != null && tokenStr != null){
+				tokenShow = String.format("<li><a href='/?cmd=logout'>%s Logout</a></li>", token.name);
 			}
-			msg.setBody(body);
-			sess.write(msg);
+			model.put("token", tokenShow);
+			
+			ReplyKit.replyTemplate(msg, sess, "home.htm", model);
 		}
 	};  
 	
-	private Message handleTemplateRequest(String prefixPath, String url){
-		Message res = new Message(); 
-		if(!url.startsWith(prefixPath)){
-			res.setStatus(400);
-			res.setBody("Missing file name in URL"); 
-			return res;
+	private MessageHandler<Message> loginHandler = new MessageHandler<Message>() {
+		public void handle(Message msg, Session sess) throws IOException {  
+			if("GET".equals(msg.getMethod())){
+				ReplyKit.replyTemplate(msg, sess, "login.htm"); 
+				return;
+			} 
+			
+			Map<String, String> data = StrKit.kvp(msg.getBodyString(), "&"); 
+			String tokenstr = null;
+			if(data.containsKey(Protocol.TOKEN)) {
+				tokenstr = data.get(Protocol.TOKEN);
+			}
+			Token token = authProvider.getToken(tokenstr); 
+			
+			Message res = new Message(); 
+			if(token == null){
+				res.setHeader("location", "/?cmd=login"); 
+				res.setStatus(302); 
+				sess.write(res);
+				return;
+			} 
+			
+			if(token != null){
+				Cookie cookie = new DefaultCookie(Protocol.TOKEN, tokenstr); 
+				res.setHeader("Set-Cookie", ServerCookieEncoder.STRICT.encode(cookie));
+			} 
+			res.setHeader("location", "/"); 
+			res.setStatus(302); //redirect to home page
+			sess.write(res);
 		}
-		url = url.substring(prefixPath.length());   
-		int idx = url.lastIndexOf('?');
-		Map<String, Object> model = null;
-		String fileName = url;
-		if(idx >= 0){
-			fileName = url.substring(0, idx); 
-			String params = url.substring(idx+1);
-			model = FileKit.parseKeyValuePairs(params);
+	};  
+	
+	private MessageHandler<Message> logoutHandler = new MessageHandler<Message>() {
+		public void handle(Message msg, Session sess) throws IOException {  
+			Message res = new Message();  
+			res.setId(msg.getId());
+			res.setHeader("location", "/?cmd=login"); 
+			
+			Cookie cookie = new DefaultCookie(Protocol.TOKEN, "");
+			cookie.setMaxAge(0);
+			res.setHeader("Set-Cookie", ServerCookieEncoder.STRICT.encode(cookie)); 
+			res.setStatus(302); 
+			sess.write(res); 
 		}
+	};  
+	
+	private Message handleTemplateRequest(Message msg){
+		return handleTemplateRequest(msg, null);
+	}
+	
+	private Message handleTemplateRequest(Message msg, Map<String, Object> model){
+		Message res = new Message();  
+		String fileName = msg.getTopic();
+		String cmd = msg.getCommand();  
 		String body = null;
 		try{
-			body = FileKit.loadTemplate(fileName, model);
+			body = FileKit.renderFile(fileName, model);
 			if(body == null){
 				res.setStatus(404);
 				body = "404: File (" + fileName +") Not Found";
@@ -375,88 +444,79 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 			body = e.getMessage();
 		}  
 		res.setBody(body); 
+		if(Protocol.JS.equals(cmd)){
+			res.setHeader("content-type", "application/javascript");
+		} else if(Protocol.CSS.equals(cmd)){
+			res.setHeader("content-type", "text/css");
+		} else if(Protocol.IMG.equals(cmd)){
+			if("favicon.ico".equals(fileName)){
+				res.setHeader("content-type", "image/x-icon");
+			} else {
+				res.setHeader("content-type", "image/svg+xml");
+			}
+		} else {
+			res.setHeader("content-type", "text/html");
+		}
 		return res;
 	}
 	
-	private Message handleFileRequest(String prefixPath, String url){
-		Message res = new Message(); 
-		if(!url.startsWith(prefixPath)){
-			res.setStatus(400);
-			res.setBody("Missing file name in URL"); 
-			return res;
-		}
-		url = url.substring(prefixPath.length());   
-		int idx = url.lastIndexOf('?');
-		String fileName = url;
-		if(idx >= 0){
-			fileName = url.substring(0, idx); 
-		}
-		byte[] body = null;
-		try{
-			body = FileKit.loadFileBytes(fileName);
-			if(body == null){
-				res.setStatus(404);
-				body = ("404: File (" + fileName +") Not Found").getBytes();
-			} else {
-				res.setStatus(200); 
-			}
-		} catch (IOException e){
-			res.setStatus(404);
-			body = e.getMessage().getBytes();
-		}  
-		res.setBody(body); 
-		return res;
-	}
+	 
 	
 	private MessageHandler<Message> pageHandler = new MessageHandler<Message>() {
-		public void handle(Message msg, Session sess) throws IOException { 
-			Message res = handleTemplateRequest("/page/", msg.getUrl());
-			if("200".equals(res.getStatus())){
-				res.setHeader("content-type", "text/html");
-			}
+		public void handle(Message msg, Session sess) throws IOException {  
+			Message res = handleTemplateRequest(msg); 
 			sess.write(res); 
 		}
 	};
 	
 	private MessageHandler<Message> jsHandler = new MessageHandler<Message>() {
 		public void handle(Message msg, Session sess) throws IOException {
-			Message res = handleFileRequest("/js/", msg.getUrl());
-			if(res.getStatus() == 200){
-				res.setHeader("content-type", "application/javascript");
-			}
+			Message res = handleTemplateRequest(msg); 
 			sess.write(res); 
 		}
 	};
 	
 	private MessageHandler<Message> cssHandler = new MessageHandler<Message>() {
 		public void handle(Message msg, Session sess) throws IOException {
-			Message res = handleFileRequest("/css/", msg.getUrl());
-			if(res.getStatus() == 200){
-				res.setHeader("content-type", "text/css");
-			} 
-			sess.write(res);
+			Message res = handleTemplateRequest(msg); 
+			sess.write(res); 
 		}
 	}; 
 	
 	private MessageHandler<Message> imgHandler = new MessageHandler<Message>() {
 		public void handle(Message msg, Session sess) throws IOException {
-			Message res = handleFileRequest("/img/", msg.getUrl());
-			if(res.getStatus() == 200){
-				res.setHeader("content-type", "image/svg+xml");
-			} 
-			sess.write(res);
+			Message res = handleTemplateRequest(msg); 
+			sess.write(res); 
 		}
 	}; 
 	
 	private MessageHandler<Message> faviconHandler = new MessageHandler<Message>() {
 		public void handle(Message msg, Session sess) throws IOException {
-			Message res = handleFileRequest("/img/", "/img/favicon.ico");
-			if(res.getStatus() == 200){
-				res.setHeader("content-type", "image/x-icon");
-			} 
-			sess.write(res);
+			Message res = handleTemplateRequest(msg); 
+			sess.write(res); 
 		}
 	};  
+	
+	private MessageHandler<Message> sslHandler = new MessageHandler<Message>() {
+		public void handle(Message msg, Session sess) throws IOException { 
+			String server = msg.getHeader("server");
+			if(StrKit.isEmpty(server)){
+				server = mqServer.getServerAddress().address;
+			}
+			
+			String certContent = mqServer.sslCertTable.get(server);
+			if(certContent == null){
+				ReplyKit.reply404(msg, sess, "Certificate("+server+") Not Found");
+				return;
+			}
+			
+			Message res = new Message();
+			res.setId(msg.getId());
+			res.setStatus(200); 
+			res.setBody(certContent);
+			sess.write(res); 
+		}
+	};
 	
 	private MessageHandler<Message> heartbeatHandler = new MessageHandler<Message>() {
 		@Override
@@ -470,9 +530,13 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 		@Override
 		public void handle(Message msg, Session session) throws IOException {  
 			try{
-				boolean ack = msg.isAck();
+				boolean ack = msg.isAck(); 
 				ServerEvent event = JsonKit.parseObject(msg.getBodyString(), ServerEvent.class);   
-				tracker.onDownstreamNotified(event); 
+				if(event == null){
+					ReplyKit.reply400(msg, session, Protocol.TRACK_PUB + " json required");
+					return;
+				}
+				tracker.serverInTrackUpdated(event); 
 				
 				if(ack){
 					ReplyKit.reply200(msg, session);
@@ -487,21 +551,22 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 		
 		@Override
 		public void handle(Message msg, Session session) throws IOException { 
-			tracker.subscribe(msg, session);
+			tracker.clientSubcribe(msg, session);
 		}
 	}; 
 	
-	private MessageHandler<Message> trackerHandler = new MessageHandler<Message>() {
-		
+	private MessageHandler<Message> trackerHandler = new MessageHandler<Message>() { 
 		@Override
 		public void handle(Message msg, Session session) throws IOException { 
-			ReplyKit.replyJson(msg, session, tracker.trackerInfo()); 
+			Token token = authProvider.getToken(msg.getToken()); 
+			ReplyKit.replyJson(msg, session, tracker.trackerInfo(token)); 
 		}
 	}; 
 	
 	private MessageHandler<Message> serverHandler = new MessageHandler<Message>() {
-		public void handle(Message msg, Session sess) throws IOException { 
-			ReplyKit.replyJson(msg, sess, mqServer.serverInfo());  
+		public void handle(Message msg, Session sess) throws IOException {  
+			Token token = authProvider.getToken(msg.getToken()); 
+			ReplyKit.replyJson(msg, sess, tracker.serverInfo(token)); 
 		}
 	}; 
 	
@@ -517,26 +582,18 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 			}
 		}
 		
-		tracker.cleanSubscriberSession(sess);  
+		tracker.cleanSession(sess);  
 	} 
-	
-	private boolean auth(Message msg){  
-		//String token = msg.getToken(); 
-		//TODO add authentication
-		return true;
-	}
 	
     public void setVerbose(boolean verbose) {
 		this.verbose = verbose;
 	}  
-     
-   
     
 	public void loadDiskQueue() throws IOException {
 		log.info("Loading DiskQueues...");
 		mqTable.clear();
 		
-		File[] mqDirs = new File(config.storePath).listFiles(new FileFilter() {
+		File[] mqDirs = new File(config.getMqPath()).listFiles(new FileFilter() {
 			@Override
 			public boolean accept(File pathname) {
 				return pathname.isDirectory();
@@ -556,107 +613,94 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
     	if(this.timer != null){
     		this.timer.shutdown();
     	}
-    } 
-    
-    private void handlUrlRpcMessage(Message msg){
-    	// rpc/<topic>/<method>/<param_1>/../<param_n>[?module=<module>&&<header_ext_kvs>]
-    	String url = msg.getUrl(); 
-    	int idx = url.indexOf('?');
-    	String rest = "";
-    	Map<String, String> kvs = null;
-    	if(idx >= 0){
-    		kvs = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER);
-    		rest = url.substring(1, idx);  
-    		String paramString = url.substring(idx+1); 
-    		StringTokenizer st = new StringTokenizer(paramString, "&");
-            while (st.hasMoreTokens()) {
-                String e = st.nextToken();
-                int sep = e.indexOf('=');
-                if (sep >= 0) {
-                	String key = e.substring(0, sep).trim().toLowerCase();
-                	String val = e.substring(sep + 1).trim();  
-                	kvs.put(key, val); 
-                }  
-            }  
-    	} else {
-    		rest = url.substring(1);
-    	}  
-    	
-    	String[] bb = rest.split("/");
-    	if(bb.length < 3){
-    		//ignore invalid 
-    		return;
-    	}
-    	
-    	String topic = bb[1];
-    	String method = bb[2];
-    	msg.setTopic(topic);
-    	Request req = new Request();
-    	req.setMethod(method); 
-    	if(kvs != null && kvs.containsKey("module")){
-    		req.setModule(kvs.get("module"));
-    	}
-    	if(bb.length>3){
-    		Object[] params = new Object[bb.length-3];
-    		for(int i=0;i<params.length;i++){
-    			params[i] = bb[3+i];
-    		}
-    		req.setParams(params); 
-    	} 
-    	
-    	msg.setBody(JsonKit.toJSONString(req));
-    }
+    }  
     
     private void handleUrlMessage(Message msg){ 
-    	if(msg.getCommand() != null){
+    	if(msg.getCommand() != null){ //if cmd in header, URL parsing is ignored!
     		return;
     	} 
     	String url = msg.getUrl(); 
     	if(url == null || "/".equals(url)){
-    		msg.setCommand("");
+    		msg.setCommand(Protocol.HOME);
     		return;
     	} 
-    	int idx = url.indexOf('?');
-    	String cmd = "";
-    	if(idx >= 0){
-    		cmd = url.substring(1, idx);  
-    	} else {
-    		cmd = url.substring(1);
+    	UrlInfo info = StrKit.parseUrl(url); 
+    	String cmd = info.params.get(Protocol.COMMAND); 
+    	if(cmd == null) {
+    		if(info.path.isEmpty()) {
+    			cmd = Protocol.HOME;
+    		} else {
+    			cmd = Protocol.PRODUCE;
+    		}
     	} 
-    	idx = cmd.indexOf('/');
-    	if(idx > 0){
-    		String topicGroup = cmd.substring(idx+1);
-    		cmd = cmd.substring(0, idx);
-    		if(restUrlCommands.contains(cmd)){
-    			String[] bb = topicGroup.split("[/]"); 
-    			int i = -1;
-    			while(++i < bb.length){
-    				if(bb[i].length() == 0) continue; 
-    				String topic = bb[i];
-    				if(msg.getTopic() == null){
-    					msg.setTopic(topic);
-    				}
-    				break;
-    			} 
-    			while(++i < bb.length){
-    				if(bb[i].length() == 0) continue;
-    				String group = bb[i];
-    				if(msg.getConsumeGroup() == null){
-    					msg.setConsumeGroup(group);
-    				}
-    				break;
-    			}  
+    	
+    	cmd = cmd.toLowerCase();
+    	msg.setCommand(cmd); 
+    	if(msg.getTopic() == null) {
+    		if(info.path.size() > 0){
+    			msg.setTopic(info.path.get(0));
     		}
     	}
+    	if(groupOptionalCommands.contains(cmd)){
+    		if(msg.getConsumeGroup() == null){
+    			if(info.path.size() > 1){
+    				msg.setConsumeGroup(info.path.get(1));
+    			}
+    		}
+    	} 
     	
-    	msg.setCommand(cmd.toLowerCase());
-    	//handle RPC
-    	if(Protocol.RPC.equalsIgnoreCase(cmd) && msg.getBody() == null){ 
-    		handlUrlRpcMessage(msg); 
-    	} else {
-    		msg.urlToHead(); 
+    	//special handle for token
+    	if(msg.getToken() == null){
+    		String token = info.params.get(Protocol.TOKEN); 
+    		if(token != null){
+    			msg.setToken(token);
+    		}
+    	} 
+    	
+    	boolean rpc = false; 
+    	MessageQueue mq = null;
+    	String topic = msg.getTopic();
+    	if(topic != null){
+    		mq = mqTable.get(topic);
     	}
+    	if(mq != null){
+    		rpc = (mq.getMask()&Protocol.MASK_RPC) != 0;
+    	}
+    	if(rpc){
+    		// /<topic>/<method>/<param_1>/../<param_n>[?module=<module>&&<header_ext_kvs>]  
+    		String method = "";
+    		if(info.path.size()>=2){
+    			method = info.path.get(1);
+    		}
+    		
+    		Request req = new Request();
+        	req.setMethod(method); 
+        	if(info.params.containsKey("module")){
+        		req.setModule(info.params.get("module"));
+        	} 
+        	if(info.path.size()>2){
+        		Object[] params = new Object[info.path.size()-2];
+        		for(int i=0;i<params.length;i++){
+        			params[i] = info.path.get(2+i);
+        		}
+        		req.setParams(params); 
+        	}  
+        	msg.setAck(false);
+        	msg.setBody(JsonKit.toJSONString(req));
+    	} 
 	}
+    
+    private void parseCookieToken(Message msg){
+    	String cookieString = msg.getHeader("cookie");
+        if (cookieString != null) {
+        	Map<String, String> cookies = StrKit.kvp(cookieString, "[;]");
+        	if(cookies.containsKey(Protocol.TOKEN)){
+        		if(msg.getToken() == null){
+        			msg.setToken(cookies.get(Protocol.TOKEN));
+        		} 
+        	} 
+        }
+    }
      
     
     public void onMessage(Object obj, Session sess) throws IOException {  
@@ -667,6 +711,7 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 		if(msg.getId() == null){
 			msg.setId(UUID.randomUUID().toString());
 		}
+		parseCookieToken(msg);
 		
 		if(verbose){
 			log.info("\n%s", msg);
@@ -675,7 +720,20 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 		
 		handleUrlMessage(msg); 
 		
-		String cmd = msg.getCommand(); 
+		String cmd = msg.getCommand();
+		boolean auth = true;
+		if(!exemptAuthCommands.contains(cmd)){
+			auth = authProvider.auth(msg);
+		}
+		
+		if(!auth){ 
+			if(Protocol.HOME.equals(cmd)){
+				ReplyKit.reply302(msg, sess, "/?cmd=login");
+			} else { 
+				ReplyKit.reply403(msg, sess);
+			} 
+			return;
+		} 
 		
     	if(cmd != null){
     		MessageHandler<Message> handler = handlerMap.get(cmd);
@@ -685,26 +743,35 @@ public class MqAdaptor extends ServerAdaptor implements Closeable {
 	    	}
     	}
     	
-    	Message res = new Message();
-    	res.setId(msg.getId()); 
-    	res.setStatus(400);
-    	String text = String.format("Bad format: command(%s) not support", cmd);
-    	res.setBody(text); 
-    	sess.write(res); 
+    	String topic = cmd; //treat cmd as topic to support proxy URL
+    	MessageQueue mq = null;
+    	if(topic != null){
+    		mq = mqTable.get(topic); 
+    	}
+    	if(mq == null || cmd == null){
+    		Message res = new Message();
+        	res.setId(msg.getId()); 
+        	res.setStatus(400);
+        	String text = String.format("Bad format: command(%s) not support", cmd);
+        	res.setBody(text); 
+        	sess.write(res);
+        	return;
+    	} 
     }  
 	
     private MessageQueue findMQ(Message msg, Session sess) throws IOException{
 		String topic = msg.getTopic();
-		if(topic == null){
+		boolean isAck = msg.isAck();
+		if(topic == null && isAck){
 			ReplyKit.reply400(msg, sess, "Missing topic"); 
     		return null;
 		}
 		
 		MessageQueue mq = mqTable.get(topic); 
-    	if(mq == null){
+    	if(mq == null && isAck){
     		ReplyKit.reply404(msg, sess); 
     		return null;
-    	} 
+    	}   
     	return mq;
 	}
 

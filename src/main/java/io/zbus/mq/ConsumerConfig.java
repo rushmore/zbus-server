@@ -32,10 +32,16 @@ public class ConsumerConfig extends MqConfig {
 	} 
 	
 	public void setConsumeGroup(String group) {
+		setConsumeGroup(group, null);
+	} 
+	
+	public void setConsumeGroup(String group, String msgFilter) {
 		ConsumeGroup consumerGroup = new ConsumeGroup();
 		consumerGroup.setGroupName(group);
+		consumerGroup.setFilter(msgFilter);
 		this.consumeGroup = consumerGroup;
 	} 
+	
 
 	public Integer getConsumeWindow() {
 		return consumeWindow;

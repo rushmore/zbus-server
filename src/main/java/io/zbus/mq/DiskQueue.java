@@ -1,53 +1,36 @@
 package io.zbus.mq;
 
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.locks.ReentrantLock;
 
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.Protocol.ConsumeGroupInfo;
-import io.zbus.mq.Protocol.TopicInfo;
 import io.zbus.mq.disk.DiskMessage;
 import io.zbus.mq.disk.Index;
 import io.zbus.mq.disk.QueueReader;
 import io.zbus.mq.disk.QueueWriter;
-import io.zbus.mq.server.ReplyKit;
 import io.zbus.transport.Session;
 
 
-public class DiskQueue implements MessageQueue{
+public class DiskQueue extends AbstractQueue{
 	private static final Logger log = LoggerFactory.getLogger(DiskQueue.class); 
-	protected final Index index;    
+	protected final Index index;     
+	protected final QueueWriter writer; 
 	
-	protected Map<String, DiskConsumeGroup> consumeGroups = new ConcurrentSkipListMap<String, DiskConsumeGroup>(String.CASE_INSENSITIVE_ORDER); 
-	protected long lastUpdateTime = System.currentTimeMillis(); 
-	
-	private final String name; 
-	private final QueueWriter writer; 
-	
-	public DiskQueue(File dir) throws IOException {  
+	public DiskQueue(File dir) throws IOException {   
 		this.index = new Index(dir);
-		this.name = index.getName();
+		this.topic = index.getName();
 		this.writer = new QueueWriter(this.index);
 		loadConsumeGroups();
 	}
 	
-	private void loadConsumeGroups() throws IOException{ 
+	protected void loadConsumeGroups() throws IOException{ 
         File[] readerFiles = index.getReaderDir().listFiles(new FileFilter() { 
 			@Override
 			public boolean accept(File pathname) {
@@ -68,14 +51,14 @@ public class DiskQueue implements MessageQueue{
 	public ConsumeGroupInfo declareGroup(ConsumeGroup ctrl) throws Exception{
 		String consumeGroup = ctrl.getGroupName();
 		if(consumeGroup == null){
-			consumeGroup = this.name;
+			consumeGroup = this.topic;
 		}
-		DiskConsumeGroup group = consumeGroups.get(consumeGroup); 
+		DiskConsumeGroup group = (DiskConsumeGroup)consumeGroups.get(consumeGroup); 
 		if(group == null){
 			QueueReader copyReader = null;
 			//1) copy reader from base group 
 			if(ctrl.getStartCopy() != null){
-				DiskConsumeGroup copyGroup = consumeGroups.get(ctrl.getStartCopy());
+				DiskConsumeGroup copyGroup = (DiskConsumeGroup)consumeGroups.get(ctrl.getStartCopy());
 				if(copyGroup != null){
 					copyReader = copyGroup.reader; 
 				}
@@ -96,11 +79,12 @@ public class DiskQueue implements MessageQueue{
 				group.reader.setCreator(ctrl.getCreator());
 			}
 			consumeGroups.put(consumeGroup, group); 
+			log.info("ConsumeGroup created: %s", group); 
 		} 
 		group.reader.setFilter(ctrl.getFilter());
-		Integer groupFlag = ctrl.getMask();
-		if(groupFlag != null){
-			group.reader.setMask(groupFlag);
+		Integer mask = ctrl.getMask();
+		if(mask != null){
+			group.reader.setMask(mask);
 		}
 		
 		if(ctrl.getStartOffset() != null){
@@ -121,18 +105,27 @@ public class DiskQueue implements MessageQueue{
 		return group.getConsumeGroupInfo();
 	}   
 	
-	@Override
-	public void removeGroup(String groupName) throws IOException {
-		DiskConsumeGroup group = consumeGroups.remove(groupName); 
-		if(group == null){
-			throw new FileNotFoundException("ConsumeGroup("+groupName+") Not Found"); 
+	private QueueReader findLatestReader(){ 
+		if(consumeGroups.isEmpty()) return null; 
+		
+		List<DiskConsumeGroup> readerList = new ArrayList<DiskConsumeGroup>();
+		for(AbstractConsumeGroup group : consumeGroups.values()){
+			readerList.add((DiskConsumeGroup)group);
 		}
-		group.delete();
+		
+		Collections.sort(readerList, new Comparator<DiskConsumeGroup>() { 
+			@Override
+			public int compare(DiskConsumeGroup o1, DiskConsumeGroup o2) {
+				return - o1.reader.compareTo(o2.reader);
+			}
+		}); 
+		return readerList.get(0).reader;
 	}
-	
+	 
+	  
 	@Override
-	public void removeTopic() throws IOException { 
-		for(DiskConsumeGroup group : consumeGroups.values()){
+	public void destroy() throws IOException { 
+		for(AbstractConsumeGroup group : consumeGroups.values()){
 			group.delete();
 		}
 		writer.close();
@@ -147,108 +140,18 @@ public class DiskQueue implements MessageQueue{
 
 		data.body = msg.toBytes(); 
 		writer.write(data); 
-		this.lastUpdateTime = System.currentTimeMillis(); 
+		this.lastUpdatedTime = System.currentTimeMillis(); 
 		dispatch();
 	}
 	
 	@Override
-	public Message consume(String consumeGroup, Integer window) throws IOException {
-		throw new IllegalStateException("Not implemented yet");
-	}
-
-	@Override
-	public void consume(Message message, Session session) throws IOException {
-		String consumeGroup = message.getConsumeGroup();
-		if(consumeGroup == null){
-			consumeGroup = this.name;
-		}  
-		
-		DiskConsumeGroup group = consumeGroups.get(consumeGroup);
+	public Message consume(String consumeGroup) throws IOException {
+		DiskConsumeGroup group = (DiskConsumeGroup)consumeGroups.get(consumeGroup);
 		if(group == null){
-			message.setBody(consumeGroup + " not found");
-			ReplyKit.reply404(message, session, "ConsumeGroup(" + consumeGroup + ") Not Found");
-			return;
+			throw new IllegalArgumentException("ConsumeGroup("+consumeGroup+") not found");
 		}   
-		 
-		if(!group.pullSessions.containsKey(session.id())){
-			group.pullSessions.put(session.id(), session);
-		}   
-		
-		for(PullSession pull : group.pullQ){
-			if(pull.getSession() == session){
-				pull.setPullMessage(message);  
-				dispatch(group);
-				return; 
-			}
-		}  
-		PullSession pull = new PullSession(session, message);
-		group.pullQ.offer(pull);  
-		dispatch(group);
-	}    
-	
-	private QueueReader findLatestReader(){ 
-		List<DiskConsumeGroup> readerList = new ArrayList<DiskConsumeGroup>(consumeGroups.values());
-		if(readerList.isEmpty()) return null; 
-		Collections.sort(readerList, new Comparator<DiskConsumeGroup>() { 
-			@Override
-			public int compare(DiskConsumeGroup o1, DiskConsumeGroup o2) {
-				return - o1.reader.compareTo(o2.reader);
-			}
-		}); 
-		return readerList.get(0).reader;
-	}
-	
-	protected void dispatch() throws IOException{  
-		Iterator<Entry<String, DiskConsumeGroup>> iter = consumeGroups.entrySet().iterator();
-		while(iter.hasNext()){
-			DiskConsumeGroup group = iter.next().getValue();
-			dispatch(group);
-		} 
-	}
-	
-	protected void dispatch(DiskConsumeGroup group) throws IOException{  
-		while(group.pullQ.peek() != null && !group.reader.isEOF()){
-			Message msg = null;
-			PullSession pull = group.pullQ.poll(); 
-			if(pull == null) break; 
-			if( !pull.getSession().active() ){  
-				continue;
-			}  
-			
-			DiskMessage data = group.reader.read();
-			if(data == null){
-				group.pullQ.offer(pull);
-				break; 
-			}
-			
-			msg = Message.parse(data.body);
-			if(msg == null){ 
-				log.error("data read from queue can not be serialized back to Message type");
-				break;
-			}
-			msg.setOffset(data.offset);   
-			
-			this.lastUpdateTime = System.currentTimeMillis(); 
-			try {  
-				Message pullMsg = pull.getPullMessage(); 
-				Message writeMsg = Message.copyWithoutBody(msg); 
-				
-				writeMsg.setOriginId(msg.getId());  
-				writeMsg.setId(pullMsg.getId());
-				if(writeMsg.getStatus() == null){
-					if(!"/".equals(writeMsg.getUrl())){
-						writeMsg.setOriginUrl(writeMsg.getUrl()); 
-					}
-					writeMsg.setStatus(200); //default to 200
-				}
-				pull.getSession().write(writeMsg); 
-			
-			} catch (Exception ex) {   
-				log.error(ex.getMessage(), ex);  
-			} 
-		} 
-		
-	}
+		return group.read();
+	}  
 	
 	@Override
 	public String getCreator() {
@@ -267,105 +170,55 @@ public class DiskQueue implements MessageQueue{
 	@Override
 	public void setMask(int value) {
 		index.setMask(value);
-	}
-	@Override
-	public long getUpdateTime() { 
-		return lastUpdateTime;
-	}
-	 
-	@Override
-	public int consumerCount(String consumeGroup) {
-		if(consumeGroup == null){
-			consumeGroup = this.name;
-		}
-		
-		DiskConsumeGroup group = consumeGroups.get(consumeGroup);
-		if(group == null){
-			return 0;
-		}   
-		return group.pullQ.size();
-	}
-	
-	public void cleanSession(Session sess) {
-		if(sess == null){
-			cleanInactiveSessions();
-			return;
-		}
-		
-		Iterator<Entry<String, DiskConsumeGroup>> iter = consumeGroups.entrySet().iterator();
-		while(iter.hasNext()){
-			DiskConsumeGroup group = iter.next().getValue();
-			cleanSession(group, sess);
-		} 
-	}
-	
-	private void cleanSession(DiskConsumeGroup group, Session sess){
-		group.pullSessions.remove(sess.id());
-		
-		Iterator<PullSession> iter = group.pullQ.iterator();
-		while(iter.hasNext()){
-			PullSession pull = iter.next();
-			if(sess == pull.session){
-				iter.remove();
-				break;
-			}
-		}
-	} 
-	 
-	private void cleanInactiveSessions() { 
-		Iterator<Entry<String, DiskConsumeGroup>> iter = consumeGroups.entrySet().iterator();
-		while(iter.hasNext()){
-			DiskConsumeGroup group = iter.next().getValue(); 
-			Iterator<PullSession> iterSess = group.pullQ.iterator();
-			while(iterSess.hasNext()){
-				PullSession pull = iterSess.next();
-				if(!pull.session.active()){
-					group.pullSessions.remove(pull.session.id());
-					iterSess.remove();
-				}
-			}
-		}  
-	}
-	
-	@Override
-	public TopicInfo getInfo() {
-		TopicInfo info = new TopicInfo(); 
-		info.topicName = name;
-		info.createdTime = index.getCreatedTime();
-		info.lastUpdatedTime = lastUpdateTime;
-		//info.creator = getCreator();  //ignore creator
-		info.mask = getMask();
-		info.messageDepth = index.getMessageCount();  
-		info.consumerCount = 0;
-		info.consumeGroupList = new ArrayList<ConsumeGroupInfo>();
-		for(DiskConsumeGroup group : consumeGroups.values()){
-			ConsumeGroupInfo groupInfo = group.getConsumeGroupInfo();
-			info.consumerCount += groupInfo.consumerCount;
-			info.consumeGroupList.add(groupInfo);
-		} 
-		
-		return info;
-	}
-	
-	@Override
-	public String getTopic() { 
-		return this.name;
 	} 
 	
-	private static class DiskConsumeGroup implements Closeable{ 
-		public final QueueReader reader;
-		public final String groupName;
-		public final BlockingQueue<PullSession> pullQ = new LinkedBlockingQueue<PullSession>();  
-		public final Map<String, Session> pullSessions = new ConcurrentHashMap<String, Session>(); 
+	@Override
+	public long createdTime() {
+		return index.getCreatedTime();
+	}
+	
+	@Override
+	public long messageDepth() { 
+		return index.getMessageCount();  
+	} 
+	 
+	
+	private class DiskConsumeGroup extends AbstractConsumeGroup{ 
+		public final QueueReader reader; 
 		
 		public DiskConsumeGroup(Index index, String groupName) throws IOException{ 
-			this.groupName = groupName;
+			super(groupName);
 			reader = new QueueReader(index, this.groupName);
 		}
 		
 		public DiskConsumeGroup(QueueReader reader, String groupName) throws IOException{ 
-			this.groupName = groupName;
+			super(groupName);
 			this.reader = new QueueReader(reader, groupName);
+		}
+		
+		@Override
+		public boolean isEnd() { 
+			try {
+				return reader.isEOF();
+			} catch (IOException e) {
+				return true;
+			}
+		}
+		
+		@Override
+		public Message read() throws IOException { 
+			DiskMessage data = reader.read();
+			if(data == null){
+				return null;
+			}
+			
+			Message msg = Message.parse(data.body);
+			if(msg == null){ 
+				log.warn("data read from queue can not be serialized back to Message type");
+			} else {
+				msg.setOffset(data.offset);   
+			}
+			return msg;
 		}
 		
 		@Override
@@ -394,47 +247,5 @@ public class DiskQueue implements MessageQueue{
 			}
 			return info;
 		}
-	}
-	
-	class PullSession { 
-		Session session;
-	    Message pullMessage;  
-	   
-	    final ReentrantLock lock = new ReentrantLock(); 
-		final BlockingQueue<Message> msgQ = new LinkedBlockingQueue<Message>(); 
-		
-		public PullSession(Session sess, Message pullMessage) { 
-			this.session = sess;
-			this.setPullMessage(pullMessage);
-		}  
-		public Session getSession() {
-			return session;
-		}
-		
-		public void setSession(Session session) {
-			this.session = session;
-		}
-		
-		public Message getPullMessage() {
-			return this.pullMessage;
-		}
-		
-		public void setPullMessage(Message msg) { 
-			this.lock.lock();
-			this.pullMessage = msg;
-			if(msg == null){
-				this.lock.unlock();
-				return; 
-			} 
-			this.lock.unlock();
-		}  
-
-		public BlockingQueue<Message> getMsgQ() {
-			return msgQ;
-		}
-		
-		public String getConsumerAddress(){
-			return session.remoteAddress();   
-		}
-	}
+	} 
 }

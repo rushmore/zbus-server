@@ -12,7 +12,7 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
@@ -44,7 +44,7 @@ public class MessageCodec extends MessageToMessageCodec<Object, Message> {
 		if(handshaker != null){//websocket step in, Message To WebSocketFrame
 			ByteBuf buf = Unpooled.wrappedBuffer(msg.toBytes());
 			WebSocketFrame frame = new TextWebSocketFrame(buf);
-			out.add(frame);
+			out.add(frame); 
 			return;
 		}
 		
@@ -57,8 +57,22 @@ public class MessageCodec extends MessageToMessageCodec<Object, Message> {
 			httpMsg = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
 					HttpResponseStatus.valueOf(Integer.valueOf(msg.getStatus())));
 		}
-
+		//content-type and encoding
+		String contentType = msg.getHeader(Message.CONTENT_TYPE);
+		if(contentType == null) {
+			contentType = "text/plain";
+		}
+		String encoding = msg.getHeader(Message.ENCODING);
+		if(encoding == null){
+			encoding = "utf-8";
+		}
+		contentType += "; charset=" + encoding;
+		httpMsg.headers().set(Message.CONTENT_TYPE, contentType);
+		
 		for (Entry<String, String> e : msg.getHeaders().entrySet()) {
+			if(e.getKey().equalsIgnoreCase(Message.CONTENT_TYPE)) continue;
+			if(e.getKey().equalsIgnoreCase(Message.ENCODING)) continue;
+			
 			httpMsg.headers().add(e.getKey().toLowerCase(), e.getValue());
 		}
 		if (msg.getBody() != null) {
@@ -86,19 +100,27 @@ public class MessageCodec extends MessageToMessageCodec<Object, Message> {
 		
 		HttpMessage httpMsg = (HttpMessage) obj;
 		Message msg = new Message();
-		Iterator<Entry<String, String>> iter = httpMsg.headers().iteratorAsString();
+		Iterator<Entry<String, String>> iter = httpMsg.headers().iterator();
 		while (iter.hasNext()) {
 			Entry<String, String> e = iter.next();
-			msg.setHeader(e.getKey().toLowerCase(), e.getValue());
+			if(e.getKey().equalsIgnoreCase(Message.CONTENT_TYPE)){ //encoding and type
+				String[] typeInfo = httpContentType(e.getValue());
+				msg.setHeader(Message.CONTENT_TYPE, typeInfo[0]);
+				if(msg.getHeader(Message.ENCODING) == null) {
+					msg.setHeader(Message.ENCODING, typeInfo[1]);
+				}
+			} else {
+				msg.setHeader(e.getKey().toLowerCase(), e.getValue());
+			} 
 		}
 
 		if (httpMsg instanceof HttpRequest) {
 			HttpRequest req = (HttpRequest) httpMsg;
-			msg.setMethod(req.method().name());
-			msg.setUrl(req.uri());
+			msg.setMethod(req.getMethod().name());
+			msg.setUrl(req.getUri());
 		} else if (httpMsg instanceof HttpResponse) {
 			HttpResponse resp = (HttpResponse) httpMsg;
-			int status = resp.status().code();
+			int status = resp.getStatus().code();
 			msg.setStatus(status);
 		}
 
@@ -114,6 +136,21 @@ public class MessageCodec extends MessageToMessageCodec<Object, Message> {
 
 		out.add(msg);
 	}
+	 
+	private static String[] httpContentType(String value){
+		String type="text/plain", charset="utf-8";
+		String[] bb = value.split(";");
+		if(bb.length>0){
+			type = bb[0].trim();
+		}
+		if(bb.length>1){
+			String[] bb2 = bb[1].trim().split("=");
+			if(bb2[0].trim().equalsIgnoreCase("charset")){
+				charset = bb2[1].trim();
+			}
+		}
+		return new String[]{type, charset};
+	}
 
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -123,7 +160,7 @@ public class MessageCodec extends MessageToMessageCodec<Object, Message> {
 			//check if websocket upgrade encountered
 			if(req.headers().contains("Upgrade") || req.headers().contains("upgrade")) {
 				WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(
-						getWebSocketLocation(req, ctx), null, true, 10 * 1024 * 1024);
+						getWebSocketLocation(req, ctx), null, true, 1024 * 1024 * 1024);
 				handshaker = wsFactory.newHandshaker(req);
 				if (handshaker == null) {
 					WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
@@ -175,7 +212,7 @@ public class MessageCodec extends MessageToMessageCodec<Object, Message> {
 	}
 
 	private static String getWebSocketLocation(HttpMessage req, ChannelHandlerContext ctx) {
-		String location = req.headers().get(HttpHeaderNames.HOST) + WEBSOCKET_PATH;
+		String location = req.headers().get(HttpHeaders.Names.HOST) + WEBSOCKET_PATH;
 		if (ctx.pipeline().get(SslHandler.class) != null) {
 			return "wss://" + location;
 		} else {
