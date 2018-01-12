@@ -15,7 +15,7 @@ public class CompositeClient<REQ extends Id, RES extends Id> implements Client<R
 	}
 	
 	@Override
-	public RES invokeSync(REQ req, int timeout) throws IOException, InterruptedException { 
+	public RES invokeSync(REQ req, long timeout) throws IOException, InterruptedException { 
 		return support.invokeSync(req, timeout);
 	} 
 	

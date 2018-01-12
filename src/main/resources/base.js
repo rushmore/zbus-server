@@ -116,11 +116,12 @@ function topicServerList(topicInfoList, filterServerList){
 		} else {
 			maskLabel += "<span class=\"label label-info\">disk</span>";
 		} 
+		var url = httpFullAddress(topicInfo.serverAddress) + "/" + topicInfo.topicName;
 		if(mask & Protocol.MASK_RPC){
-			maskLabel += "<span class=\"label label-primary\">rpc</span>";
+			maskLabel += "<a target='_blank' class=\"label label-primary\" href='" + url + "'>rpc</a>";
 		}  
 		if(mask & Protocol.MASK_PROXY){
-			maskLabel += "<span class=\"label label-primary\">proxy</span>";
+			maskLabel += "<a target='_blank' class=\"label label-primary\" href='" + url + "'>proxy</a>";
 		}
 		
 		res += "<tr>";
@@ -141,7 +142,7 @@ function topicServerList(topicInfoList, filterServerList){
 	} 
    	return res;
 }
-
+ 
 function showTopicTable(topicTable, filterServerList){ 
 	$("#topic-list").find("tr:gt(2)").remove(); 
 	var topics = [];
@@ -156,7 +157,7 @@ function showTopicTable(topicTable, filterServerList){
 		if(!serverList) continue;
 		$("#topic-list").append(
 			"<tr id="+topicName+">\
-				<td><span class='topic'>" +topicName + "</span>\
+				<td><span class='topic'>" + topicName + "</span>\
 				<div class='op'>\
 					<div><a href='#' class='op-del' data-topic='" + topicName + "' data-toggle='modal' data-target='#remove-topic-modal'>&#8722;</a></div>\
 					</div></td>\

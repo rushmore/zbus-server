@@ -1,4 +1,4 @@
-package io.zbus.rpc.bootstrap;
+package io.zbus.rpc.bootstrap.mq;
 
 import java.util.List;
 import java.util.Map;
@@ -8,6 +8,7 @@ import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 
+import io.zbus.mq.server.MqServerConfig;
 import io.zbus.rpc.Remote;
 import io.zbus.transport.ServerAddress;
 
@@ -50,11 +51,19 @@ public class SpringServiceBootstrap extends ServiceBootstrap implements Applicat
 	}   
 	
 	public void setSslCertFile(String certFile){
-		ssl(certFile, null);
+		if(serverConfig == null){
+			serverConfig = new MqServerConfig();
+		}
+		serverConfig.setSslCertFile(certFile); 
+		serverConfig.setSslEnabled(true);
 	}  
 	
 	public void setSslKeyFile(String keyFile){
-		ssl(null, keyFile);
+		if(serverConfig == null){
+			serverConfig = new MqServerConfig();
+		}
+		serverConfig.setSslKeyFile(keyFile);
+		serverConfig.setSslEnabled(true);
 	}   
 	
 	public void setStorePath(String mqPath){
@@ -87,5 +96,21 @@ public class SpringServiceBootstrap extends ServiceBootstrap implements Applicat
 	 
 	public void setAutoDiscover(boolean autoDiscover) {
 		autoDiscover(autoDiscover);
+	}
+	
+	public void setVerbose(boolean verbose){
+		verbose(verbose);
+	}
+	
+	public void setStackTrace(boolean stackTrace){
+		stackTrace(stackTrace);
+	}
+	
+	public void setMethodPage(boolean methodPage){
+		methodPage(methodPage);
+	}
+	
+	public void setDeclareOnMissing(boolean declareOnMissing){
+		declareOnMissing(declareOnMissing);
 	}
 }

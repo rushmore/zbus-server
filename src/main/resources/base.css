@@ -21,8 +21,7 @@
 	top: 4px;
 }
 .topic {
-	margin: 3px; 
-	cursor: pointer;
+	margin: 3px;  
 } 
  
 
@@ -244,4 +243,8 @@ td div.num{
 
 .login .token{
 	width: 300px;
+}
+
+.hide{
+	display: none;
 }

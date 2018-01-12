@@ -33,6 +33,7 @@ import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,7 @@ public class Message implements Id {
 	public static final String CONTENT_TYPE     = "content-type";    
 	public static final String CONTENT_TYPE_BINARY   = "application/octet-stream"; 
 	public static final String CONTENT_TYPE_JSON     = "application/json"; 
+	public static final String CONTENT_TYPE_UPLOAD   = "multipart/form-data";
 	 
 	protected Integer status; //null: request, otherwise: response
 	protected String url = "/";
@@ -66,6 +68,8 @@ public class Message implements Id {
 	
 	protected Map<String, String> headers = new ConcurrentHashMap<String, String>(); 
 	protected byte[] body; 
+	
+	protected FileForm fileForm;  //Only populated when uploading files
 	
 	public Message(){
 		setBody((byte[])null);
@@ -79,6 +83,7 @@ public class Message implements Id {
 		
 		this.headers = other.headers;
 		this.body = other.body;
+		this.fileForm = other.fileForm;
 	}
 	
 	public Message(String body){
@@ -102,6 +107,7 @@ public class Message implements Id {
 		res.method = msg.method;
 		res.headers = new ConcurrentHashMap<String, String>(msg.headers);
 		res.body = msg.body;
+		res.fileForm = msg.fileForm;
 		return res;
 	}
 	 
@@ -461,4 +467,19 @@ public class Message implements Id {
 			out.write(body);
 		}
 	}  
+	
+	public FileForm getFileForm() {
+		return fileForm;
+	}
+	
+	public static class FileUpload { 
+		public String fileName;
+		public String contentType;
+		public byte[] data;
+	}
+	
+	public static class FileForm {
+		public Map<String, String> attributes = new HashMap<String, String>();
+		public Map<String, List<FileUpload>> files = new HashMap<String, List<FileUpload>>();
+	}
 }

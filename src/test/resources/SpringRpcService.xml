@@ -9,7 +9,7 @@ http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
 	<bean class="io.zbus.examples.rpc.biz.inheritance.SubService2"></bean> 
 	
 	
-	<bean class="io.zbus.rpc.bootstrap.SpringServiceBootstrap" init-method="start">
+	<bean class="io.zbus.rpc.bootstrap.mq.SpringServiceBootstrap" init-method="start">
 		<property name="serviceName" value="MyRpc"/> 
 		<property name="serviceToken" value="myrpc_service"/> 
 		<property name="autoDiscover" value="true"/>  

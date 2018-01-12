@@ -121,8 +121,13 @@ public class MappedFile implements Closeable {
 	} 
 	
 	public void delete() throws IOException{
-		close(); 
-		diskFile.delete();
+		try {
+			lock.lock();
+			close(); 
+			diskFile.delete();
+		} finally {
+			lock.unlock();
+		} 
 	} 
 	
 	@Override

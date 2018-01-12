@@ -2,6 +2,8 @@ package io.zbus.mq.disk;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
 
 public class BlockReadBuffer {
 	private static final int BUFFER_SIZE = 1024*1024; //TODO, Make it configuarable
@@ -16,11 +18,11 @@ public class BlockReadBuffer {
 		this.buffer = new byte[BUFFER_SIZE];
 	}
 	
-	public int remaining(){
+	public synchronized int remaining(){
 		return bufferLen - offset;
 	}
 	
-	public void loadBuffer() throws IOException{
+	private void loadBuffer() throws IOException{
 		this.file.seek(this.pos);
 		this.offset = 0;
 		this.bufferLen = this.file.read(buffer);
@@ -28,6 +30,7 @@ public class BlockReadBuffer {
 			this.bufferLen = 0;
 		}
 	}
+	 
 	
 	public void seek(long pos) throws IOException{  
 		if(pos < this.pos || pos >= (this.pos + this.bufferLen)){
@@ -49,6 +52,28 @@ public class BlockReadBuffer {
 		}  
 		
 		return n;
+	}
+	
+	public boolean checksum(int size, long checksum){  
+		byte[] data = new byte[size]; 
+		try {
+			int n = peek(data);
+			if(n <= 0){
+				return false;
+			}
+		} catch (IOException e) {
+			return false;
+		} 
+		
+		Checksum crc = new CRC32();
+		crc.update(data, 0, size);
+		return checksum == crc.getValue();
+	}
+	
+	public static long calcChecksum(byte[] data){
+		Checksum crc = new CRC32();
+		crc.update(data, 0, data.length);
+		return crc.getValue();
 	}
 	
 	public int read(byte[] data) throws IOException{   
@@ -75,6 +100,20 @@ public class BlockReadBuffer {
 			required -= n; 
 		} 
 		return dst;
+	}
+	
+	public int peek(byte[] data) throws IOException{   
+		int required = data.length;
+		if(required <= remaining()){
+			System.arraycopy(this.buffer, offset, data, 0, required); 
+			return required;
+		}
+		 
+		
+		long peekPos = this.pos + offset; 
+		this.file.seek(peekPos);
+		int n = this.file.read(data);
+		return n;
 	}
 	
 	

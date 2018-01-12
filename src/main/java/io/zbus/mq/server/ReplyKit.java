@@ -18,7 +18,7 @@ public class ReplyKit {
 		res.setStatus(200);
 		res.setId(req.getId());
 		res.setHeader("content-type", "text/html"); 
-		String body = FileKit.renderFile(fileName, model);
+		String body = FileKit.loadFile(fileName, model);
 		res.setBody(body);
 		session.write(res);  
 	}
@@ -99,6 +99,17 @@ public class ReplyKit {
 		}
 		text += "Forbbiden";
 		res.setBody(text); 
+		session.write(res);
+	} 
+	
+	public static void reply401(Message msg, Session session, String reason) throws IOException {
+		Message res = new Message();
+		String topic = msg.getTopic(); 
+		res.setId(msg.getId());
+		res.setStatus(401);
+		res.setTopic(topic);
+		 
+		res.setBody(reason); 
 		session.write(res);
 	} 
 	

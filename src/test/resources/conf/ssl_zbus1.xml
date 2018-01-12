@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<zbus compatible="false">   <!-- Enable compatible to zbus7 -->  
+<zbus>
 
 	<serverHost>0.0.0.0</serverHost>  
 	<serverPort>15555</serverPort>  
 	<serverName></serverName> <!-- Public IP/Domain name -->   
+ 	
+ 	<monitor enabled="true" port="15555"/> <!-- If port not configured, same as server, could be the same port! -->  
  
  	<sslEnabled certFile="ssl/zbus.crt" keyFile="ssl/zbus.key">true</sslEnabled> 
  
@@ -25,7 +27,7 @@
 	</trackerList>  
 	-->  
 	
-	<auth enabled="true" class="">
+	<auth enabled="false" class="">
 		<token value="" operation="js, css, img, ssl, tracker, track_sub, track_pub">  
 			<topic value="*"/>
 		</token>

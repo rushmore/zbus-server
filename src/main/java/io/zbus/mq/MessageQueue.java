@@ -17,6 +17,7 @@ import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.Protocol.ConsumeGroupInfo;
 import io.zbus.mq.Protocol.TopicInfo;
+import io.zbus.mq.server.MessageLogger;
 import io.zbus.mq.server.ReplyKit;
 import io.zbus.transport.Session;
 
@@ -24,6 +25,7 @@ public interface MessageQueue {
 
 	void produce(Message message) throws IOException;  
 	Message consume(String consumeGroup) throws IOException;  
+	void ack(Message message, Session session) throws IOException;
 	
 	void consume(Message message, Session session) throws IOException;   
 	void unconsume(Message message, Session session) throws IOException;   
@@ -47,6 +49,8 @@ public interface MessageQueue {
 	
 	int getMask(); 
 	void setMask(int value);  
+	
+	void setMessageLogger(MessageLogger messageLogger);
 }
 
 
@@ -99,6 +103,8 @@ abstract class AbstractQueue implements MessageQueue{
 	protected Map<String, AbstractConsumeGroup> consumeGroups = new ConcurrentSkipListMap<String, AbstractConsumeGroup>(String.CASE_INSENSITIVE_ORDER); 
 	protected long lastUpdatedTime = System.currentTimeMillis();  
 	protected String topic;   
+	protected MessageLogger messageLogger;
+	protected long groupNumber = consumeGroups.size();
 	  
 	public AbstractQueue(){
 		
@@ -108,6 +114,24 @@ abstract class AbstractQueue implements MessageQueue{
 	}
 	
 	protected void loadConsumeGroups() throws IOException{ }
+	
+	protected String nextGroupName(){
+		if(!consumeGroups.containsKey(topic)) return topic;
+		
+		while(true){
+			String name = topic + groupNumber;
+			if(consumeGroups.containsKey(name)){
+				groupNumber++;
+				continue;
+			}
+			return name;
+		}
+	}
+	
+	@Override
+	public void setMessageLogger(MessageLogger messageLogger) {
+		this.messageLogger = messageLogger;
+	}
 	
 	@Override
 	public void destroy() throws IOException { 
@@ -156,9 +180,21 @@ abstract class AbstractQueue implements MessageQueue{
 			ReplyKit.reply404(message, session, "ConsumeGroup(" + consumeGroup + ") Not Found");
 			return;
 		}   
-		group.removeSession(session);
+		group.removeSession(session); 
+	}
+	
+	public void ack(Message message, Session session) throws IOException {
+		String consumeGroup = message.getConsumeGroup();
+		if(consumeGroup == null){
+			consumeGroup = this.topic;
+		}  
+		AbstractConsumeGroup group = consumeGroups.get(consumeGroup);
+		if(group == null){ 
+			return;
+		}     
+		Long offset = message.getOffset();
+		group.ack(offset);
 		
-		ReplyKit.reply200(message, session);
 	}
 
 	@Override
@@ -175,9 +211,34 @@ abstract class AbstractQueue implements MessageQueue{
 			return;
 		}   
 		 
-		if(!group.pullSessions.containsKey(session.id())){
+		if(!group.pullSessions.containsKey(session.id())){ 
+			if (group.pullSessions.size() > 0) { //thread safty TODO
+				if((group.getMask() & Protocol.MASK_EXCLUSIVE) != 0){ 
+					ReplyKit.reply401(message, session, String.format("ConsumeGroup(%s) exclusive, forbbiden", 
+							consumeGroup));
+					return;
+				}
+			}
 			group.pullSessions.put(session.id(), session);
 		}   
+		 
+		
+		Long offset = message.getOffset(); 
+		if(offset != null) { //handle case of pulling message with offset
+			Message res = null;
+			try{
+				res = group.read(offset);
+			} catch (IllegalStateException e) {
+				log.warn(e.getMessage());;
+			}
+			if(res == null) {
+				ReplyKit.reply404(message, session, "Message Not Found: offset=" + offset);
+				return;
+			}
+			String pullMsgId = message.getId();
+			sendOutMessage(group.groupName, session, res, pullMsgId);
+			return;
+		}
 		
 		for(PullSession pull : group.pullQ){
 			if(pull.getSession() == session){
@@ -200,16 +261,22 @@ abstract class AbstractQueue implements MessageQueue{
 		} 
 	}
 	
-	protected void dispatch(AbstractConsumeGroup group) throws IOException{  
-		while(group.pullQ.peek() != null && !group.isEnd()){
-			Message msg = null;
+	protected void dispatch(AbstractConsumeGroup group) throws IOException {   
+		while(group.pullQ.peek() != null){
+			Message msg = group.readTimeoutMessage();
+			if(msg == null && group.isEnd()) break;
+			
+			if(group.isNakFull()) break; //NAk message full
+			
 			PullSession pull = group.pullQ.poll(); 
 			if(pull == null) break; 
 			if( !pull.getSession().active() ){  
 				continue;
 			}  
+			if(msg == null) {
+				msg = group.read();
+			}
 			
-			msg = group.read();
 			if(msg == null){
 				group.pullQ.offer(pull);
 				break; 
@@ -217,27 +284,47 @@ abstract class AbstractQueue implements MessageQueue{
 			
 			this.lastUpdatedTime = System.currentTimeMillis(); 
 			try {  
-				Message pullMsg = pull.getPullMessage(); 
-				Message writeMsg = Message.copyWithoutBody(msg); 
 				
-				writeMsg.setOriginId(msg.getId());  
-				writeMsg.setId(pullMsg.getId());
-				Integer status = writeMsg.getStatus();
-				if(status == null){
-					if(!"/".equals(writeMsg.getUrl())){
-						writeMsg.setOriginUrl(writeMsg.getUrl()); 
-					} 
-				} else {
-					writeMsg.setOriginStatus(status);
+				if(group.isAckEnabled()) {
+					try {
+						group.recordNak(msg.getOffset(),msg.getRetry());
+					} catch (Exception e) {
+						log.error(e.getMessage(), e);  
+					}
 				} 
-				writeMsg.setStatus(200); //status meaning changed to 'consume-status'
-				pull.getSession().write(writeMsg);  
+				
+				Message pullMsg = pull.getPullMessage(); 
+				sendOutMessage(group.groupName, pull.getSession(), msg, pullMsg.getId()); 
 			} catch (Exception ex) {   
 				log.error(ex.getMessage(), ex);  
 			} 
 		} 
 		
 	} 
+	
+	private void sendOutMessage(String groupName, Session session, Message msg, String pullMsgId) {
+		Message writeMsg = Message.copyWithoutBody(msg); 
+		
+		writeMsg.removeHeader(Protocol.TOKEN); //Remove sensitive Token info
+		writeMsg.setOriginId(msg.getId());  
+		writeMsg.setId(pullMsgId);
+		writeMsg.setConsumeGroup(groupName);
+		
+		Integer status = writeMsg.getStatus();
+		if(status == null){
+			writeMsg.setOriginMethod(writeMsg.getMethod());
+			if(!"/".equals(writeMsg.getUrl())){
+				writeMsg.setOriginUrl(writeMsg.getUrl()); 
+			}  
+		} else {
+			writeMsg.setOriginStatus(status);
+		} 
+		writeMsg.setStatus(200); //status meaning changed to 'consume-status'
+		if(messageLogger != null) {
+			messageLogger.log(writeMsg, session);
+		}
+		session.write(writeMsg);  
+	}
 	
 	@Override
 	public int sessionCount(String consumeGroup) {
@@ -276,6 +363,16 @@ abstract class AbstractQueue implements MessageQueue{
 				break;
 			}
 		}
+		//remove group if masked as delete_on_exit
+		if((group.getMask() & Protocol.MASK_DELETE_ON_EXIT) != 0){
+			if(group.pullSessions.size() == 0){ 
+				try {
+					group.delete();
+				} catch (IOException e) {
+					log.warn(e.getMessage());
+				}
+			}
+		}
 	} 
 	 
 	private void cleanInactiveSessions() { 
@@ -287,7 +384,19 @@ abstract class AbstractQueue implements MessageQueue{
 				PullSession pull = iterSess.next();
 				if(!pull.session.active()){
 					group.pullSessions.remove(pull.session.id());
-					iterSess.remove();
+					iterSess.remove(); 
+				}
+			}
+			
+			//remove group if masked as delete_on_exit
+			if((group.getMask() & Protocol.MASK_DELETE_ON_EXIT) != 0){
+				if(group.pullSessions.size() == 0){
+					iter.remove();
+					try {
+						group.delete();
+					} catch (IOException e) {
+						log.warn(e.getMessage());
+					}
 				}
 			}
 		}  
@@ -336,9 +445,37 @@ abstract class AbstractQueue implements MessageQueue{
 			}
 		}
 		
-		public abstract Message read() throws IOException ;
+		public Message readTimeoutMessage() throws IOException{
+			return null;
+		}
+		
+		public void ack(long offset) throws IOException{
+			
+		}
+		
+		public abstract Message read() throws IOException;
+		
+		public abstract Message read(long offset) throws IOException;
 
 		public abstract boolean isEnd();
+		
+		public Integer getMask(){
+			return 0;
+		}
+		
+		public boolean isAckEnabled() {
+			Integer mask = getMask();
+			if(mask == null) return false;
+			return (mask & Protocol.MASK_ACK_REQUIRED) != 0;
+		}
+		
+		public boolean isNakFull(){
+			return false;
+		}
+		
+		public void recordNak(Long offset, Integer retryCount) {
+			
+		}
 		
 		@Override
 		public void close() throws IOException { } 

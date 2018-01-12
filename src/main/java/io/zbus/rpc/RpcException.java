@@ -40,5 +40,8 @@ public class RpcException extends RuntimeException {
 	public RpcException(Throwable cause) {
 		super(cause); 
 	}
-
+	
+	public RpcException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
+		super(message, cause, enableSuppression, writableStackTrace); 
+	}
 }

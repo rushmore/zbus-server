@@ -12,8 +12,7 @@ import io.zbus.kit.ConfigKit;
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.Broker;
-import io.zbus.proxy.http.ProxyConfig.ProxyEntry;
-import io.zbus.proxy.http.ProxyConfig.ProxyHandlerConfig;
+import io.zbus.proxy.http.HttpProxyConfig.ProxyEntry;
 import io.zbus.transport.ServerAddress;
 
 /**
@@ -34,9 +33,9 @@ public class HttpProxy implements Closeable {
 	private boolean ownBroker = false;  
 	
 	private Map<String, List<ProxyHandler>> entryHandlerTable = new HashMap<String, List<ProxyHandler>>();
-	private ProxyConfig config;
+	private HttpProxyConfig config;
 	
-	public HttpProxy(ProxyConfig config) throws IOException { 
+	public HttpProxy(HttpProxyConfig config) throws IOException { 
 		this.config = config;
 		if (config.getBroker() != null) {
 			this.broker = config.getBroker();
@@ -58,33 +57,50 @@ public class HttpProxy implements Closeable {
 	}
 
 	public synchronized void start() throws IOException {
-		 for(Entry<String, ProxyEntry> e : this.config.getEntryTable().entrySet()){
-			 String topic = e.getKey();
-			 ProxyEntry entry = e.getValue();
-			 List<ProxyHandler> handlers = new ArrayList<ProxyHandler>();
-			 for(String target : entry.targetList){
-				 ProxyHandlerConfig handlerConfig = new ProxyHandlerConfig();
-				 handlerConfig.topic = topic;
-				 handlerConfig.token = entry.token;
-				 handlerConfig.targetUrl = target;
-				 handlerConfig.broker = broker;
-				 handlerConfig.connectionCount = this.config.getConnectionCount();
-				 handlerConfig.consumeTimeout = this.config.getConsumeTimeout();
-				 handlerConfig.sendFilter = entry.sendFilter;
-				 handlerConfig.recvFilter = entry.recvFilter;
-				 
-				 ProxyHandler handler = new ProxyHandler(handlerConfig);
-				 handlers.add(handler);
-				 try{
-					 handler.start(); 
-				 } catch (Exception ex) { 
-					 log.error(ex.getMessage(), ex);
-				 }
-			 }
-			 entryHandlerTable.put(topic, handlers);
-		 }
+		for (Entry<String, ProxyEntry> e : this.config.getEntryTable().entrySet()) {
+			String topic = e.getKey();
+			ProxyEntry entry = e.getValue();
+			List<ProxyHandler> handlers = new ArrayList<ProxyHandler>();
+			for (String target : entry.targetList) {
+				ProxyHandlerConfig handlerConfig = new ProxyHandlerConfig();
+				handlerConfig.topic = topic;
+				handlerConfig.token = entry.token;
+				handlerConfig.broker = broker;
+				handlerConfig.consumerCount = this.config.getConsumerCount();
+				handlerConfig.consumeTimeout = this.config.getConsumeTimeout();
+				handlerConfig.sendFilter = entry.sendFilter;
+				handlerConfig.recvFilter = entry.recvFilter;
+				handlerConfig.targetHeartbeat = entry.heartbeatInterval;
+				handlerConfig.targetClientCount = entry.targetClientCount;
+
+				if (target.startsWith("http://")) {
+					target = target.substring("http://".length());
+				}
+				String[] bb = target.split("[//]", 2);
+				handlerConfig.targetServer = bb[0].trim();
+				String url = "";
+				if (bb.length > 1) {
+					url = bb[1].trim();
+				}
+				if (!url.endsWith("/")) {
+					url += "/";
+				}
+				if (!url.startsWith("/")) {
+					url = "/" + url;
+				}
+				handlerConfig.targetUrl = url; // format: /xxx/
+
+				ProxyHandler handler = new ProxyHandler(handlerConfig);
+				handlers.add(handler);
+				try {
+					handler.start();
+				} catch (Exception ex) {
+					log.error(ex.getMessage(), ex);
+				}
+			}
+			entryHandlerTable.put(topic, handlers);
+		}
 	}
- 
 	 
 	@Override
 	public void close() throws IOException { 
@@ -109,7 +125,7 @@ public class HttpProxy implements Closeable {
 	@SuppressWarnings("resource")
 	public static void main(String[] args) throws IOException {
 		String configFile = ConfigKit.option(args, "-conf", "conf/http_proxy.xml"); 
-		ProxyConfig config = new ProxyConfig();
+		HttpProxyConfig config = new HttpProxyConfig();
 		config.loadFromXml(configFile);
 		  
 		HttpProxy proxy = new HttpProxy(config);

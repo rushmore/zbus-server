@@ -334,7 +334,7 @@ function httpEncode(msg) {
     for (var key in msg) {
         if (key in nonHeaders) continue;
         var val = msg[key];
-        if (typeof val == 'undefined') continue;
+        if (typeof val == 'undefined' || val == null) continue;
         line = "{0}: {1}\r\n".format(camel2underscore(key), msg[key]);
         headers += line;
     }
@@ -431,9 +431,9 @@ function httpDecode(data) {
     var encoding = msg.encoding;
     if (!encoding) encoding = "utf8"; 
     var bodyData = data.slice(pos + 4, pos + 4 + lenVal);
-    if (typeVal == "text/html" || typeVal == "text/plain") {
+    if (typeVal.startsWith("text/html") || typeVal.startsWith("text/plain")) {
         msg.body = uint8Array2String(bodyData, encoding);
-    } else if (typeVal == "application/json") {
+    } else if (typeVal.startsWith("application/json")) {
         var bodyString = uint8Array2String(bodyData, encoding);
         msg.body = JSON.parse(bodyString);
     } else {
@@ -535,6 +535,8 @@ function MqClient(serverAddress) {
     this.onMessage = null;
     this.onConnected = null;
     this.onDisconnected = null;  
+    this.socket = null;
+    this.connectPromise = null;
 
     this.readBuf = new Uint8Array(0); //only used when NODEJS 
 } 
@@ -544,7 +546,7 @@ if (__NODEJS__) {
 inherits(MqClient, Events.EventEmitter); 
 
 MqClient.prototype.connect = function (connectedHandler) { 
-    if(this.socket && this.connectPromise) {
+    if(this.socket != null && this.connectPromise != null) {
         return this.connectPromise;
     }
     this.onConnected = connectedHandler;
@@ -688,21 +690,31 @@ MqClient.prototype.close = function () {
 //WebSocket
 	
 MqClient.prototype.connect = function (connectedHandler) {
+    if(this.socket != null && this.connectPromise != null) {
+        return this.connectPromise;
+    }
+
     logger.debug("Trying to connect to " + this.address()); 
     this.onConnected = connectedHandler; 
 
-    //should handle failure 
     var connectSuccess;
-    this.connectPromise = new Promise(resolve => {
+    var connectFailure;
+    this.connectPromise = new Promise((resolve, reject) => {
         connectSuccess = resolve;
-    });
+        connectFailure = reject;
+    }); 
 
     var WebSocket = window.WebSocket;
     if (!WebSocket) {
         WebSocket = window.MozWebSocket;
     }
-
-    this.socket = new WebSocket(this.address());
+    try{
+        this.socket = new WebSocket(this.address());
+    } catch(e){
+        connectFailure(e);
+        return this.connectPromise;
+    }
+    
     this.socket.binaryType = 'arraybuffer';
     var client = this;
     this.socket.onopen = function (event) {
@@ -721,7 +733,7 @@ MqClient.prototype.connect = function (connectedHandler) {
     };
 
     this.socket.onclose = function (event) {
-        this.connectPromise = null;
+        client.connectPromise = null;
         clearInterval(client.heartbeat);
         if (client.onDisconnected) {
             client.onDisconnected(); 
@@ -878,6 +890,9 @@ MqClient.prototype.produce = function (msg) {
 }
 MqClient.prototype.consume = function (msg) { 
     return this.invokeCmd(Protocol.CONSUME, msg);
+}  
+MqClient.prototype.tracker = function () { 
+    return this.invokeObject(Protocol.TRACKER, {});
 } 
 
 
@@ -994,6 +1009,7 @@ class Broker {
         this.onServerJoin = null;
         this.onServerLeave = null;
         this.onServerUpdated = null;
+        this.onTrackerUpdated = null;
 
         this.readyTable = {};  
         this.readyTriggered = false;
@@ -1085,6 +1101,9 @@ class Broker {
                 return;
             }
             var trackerInfo = msg.body;
+            if(broker.onTrackerUpdated != null){
+                broker.onTrackerUpdated(trackerInfo);
+            }
             
             //update remote real address
             var trackerAddress = new ServerAddress(trackerInfo.serverAddress);
@@ -1122,19 +1141,18 @@ class Broker {
                     if(trackerAddress.trim() == "") continue; 
                     this.addTracker(trackerAddress);
                 } 
-            }
-            if(trackerAddressList.constructor == Array){
+            } else if(trackerAddressList.constructor == Array){
                 for(var i in trackerAddressList){
                     var trackerAddress = trackerAddressList[i];
                     trackerAddress = new ServerAddress(trackerAddress);
                     this.addTracker(trackerAddress);
                 }
-            }
-            if(trackerAddressList.constructor == ServerAddress){
+            } else if(trackerAddressList.constructor == ServerAddress){
                 var trackerAddress = trackerAddressList;
                 this.addTracker(trackerAddress);
-            } 
-            this.addTracker(trackerAddressList);
+            } else {
+                this.addTracker(trackerAddressList);
+            }
         } 
     }
 
@@ -1311,10 +1329,14 @@ class Consumer extends MqAdmin {
         if (consumeCtrl.constructor == String) {
             consumeCtrl = {
                 topic: consumeCtrl,
+                consume_group: consumeCtrl,
                 token: this.token
             };
         }
         this.consumeCtrl = clone(consumeCtrl); 
+        if(this.consumeCtrl.consume_group == undefined || this.consumeCtrl.consume_group == null){
+            this.consumeCtrl.consume_group = this.consumeCtrl.topic;
+        }
 
         this.consumeClientTable = {}; //addressKey => list of MqClient consuming
     }  
@@ -1354,14 +1376,8 @@ class Consumer extends MqAdmin {
         for (var i = 0; i < this.connectionCount; i++) {
             var client = clientInBrokerTable.fork(); //create new connections
             clients.push(client);   
-            client.connect((client) => { //web browser need 
-                var ctrl = clone(consumer.consumeCtrl);
-                client.declare(ctrl).then(res=>{
-                    if (res.error) { 
-                        throw new Error("declare error: " + res.error);
-                    } 
-                    consumer.consume(client);
-                });
+            client.connect((client) => {  
+                consumer.consume(client); 
             });  
         }  
         this.consumeClientTable[addr] = clients; 
@@ -1387,6 +1403,7 @@ class Consumer extends MqAdmin {
         .then(res => {
             if(res.status == 404) {//Missing topic, to declare 
                 var ctrl = clone(consumer.consumeCtrl);
+                logger.debug("Trying to declare " + JSON.stringify(ctrl));
                 return client.declare(ctrl)
                 .then(res=>{
                     if (res.error) { 
@@ -1412,11 +1429,15 @@ class Consumer extends MqAdmin {
     }
 }
 
+/**
+ * Mode1: MQ-based RPC
+ * Mode2: Http direct RPC
+ */
 class RpcInvoker { 
-    constructor(broker, topicOrCtrl, serverSelector){
+    constructor(brokerOrClient, topicOrCtrl, serverSelector){
         if(serverSelector){
             this.rpcServerSelector = serverSelector;
-        }  else {
+        }  else if(brokerOrClient.constructor == Broker){
             this.rpcServerSelector = (routeTable, msg) => {
                 var topic = msg.topic;
                 if (hashSize(routeTable.serverTable) == 0) return [];
@@ -1434,14 +1455,20 @@ class RpcInvoker {
                 return [addressKey(target.serverAddress)];
             }
         } 
-
-        this.broker = broker;
-        this.prodcuer = new Producer(broker); 
-        if(topicOrCtrl.constructor == String){
-            this.ctrl = {topic: topicOrCtrl};
+        if(brokerOrClient.constructor == Broker){
+            this.prodcuer = new Producer(brokerOrClient); 
+            if(topicOrCtrl.constructor == String){
+                this.ctrl = {topic: topicOrCtrl};
+            } else {
+                this.ctrl = clone(topicOrCtrl); 
+            } 
+        } else if(brokerOrClient.constructor == MqClient){
+            this.client = brokerOrClient;
+            this.ctrl = {};
         } else {
-            this.ctrl = clone(topicOrCtrl); 
-        } 
+            throw "brokerOrClient should be Broker or MqClient";
+        }
+        
         var invoker = this; 
         return new Proxy(this, {
             get: function (target, name) {
@@ -1467,29 +1494,36 @@ class RpcInvoker {
                 params: params,
             }
         } 
+        if(this.module && req && !req.module){
+            req.module = this.module;
+        }
         return this.invokeMethod(req);
     } 
  
     invokeMethod(req) {
         var msg = clone(this.ctrl);
-        msg.body = JSON.stringify(req);
-        msg.ack = false;
+        msg.body = JSON.stringify(req); 
         
-        return this.prodcuer.publish(msg, this.rpcServerSelector)
-        .then(msg => {
+        var p;
+        if('prodcuer' in this){
+            msg.ack = false; //RPC no need reply from broker
+            p = this.prodcuer.publish(msg, this.rpcServerSelector);   
+        } else {
+            var httpClient = this.client;
+            if(httpClient.active()){
+                p = httpClient.invokeCmd(null, msg);
+            } else {
+                p = httpClient.connect().then(function(){
+                    return httpClient.invokeCmd(null, msg);
+                });
+            } 
+        } 
+
+        return p.then(msg => {
             if (msg.status != 200) {
                 throw msg.body;
-            }
-            var res = {};
-            if(typeof(msg.body) == 'string'){
-                res = JSON.parse(msg.body);
-            } else {
-                res = msg.body;
-            }  
-            if (res.error) {
-                throw res.error;
-            }
-            return res.result;
+            } 
+            return msg.body; 
         });
     } 
 
@@ -1505,6 +1539,9 @@ class RpcInvoker {
                 method: method,
                 params: params,
             }  
+            if(this.module){
+                req.module = this.module;
+            }
             return invoker.invokeMethod(req);
         }
     }
@@ -1514,15 +1551,14 @@ class RpcProcessor {
     constructor(){
         this.methodTable = {} 
         var processor = this;
-        this.messageHandler = function (msg, client) {
-            var res = { error: null };  
+        this.messageHandler = function (msg, client) { 
             var resMsg = {
                 id: msg.id,
                 recver: msg.sender,
-                topic: msg.topic,
-                status: 200,
-                body: res,
+                topic: msg.topic, 
             }; 
+            var status = 600; //error
+            var result;
             
             try { 
                 var req = msg.body;
@@ -1531,16 +1567,33 @@ class RpcProcessor {
                 var m = processor.methodTable[key];
                 if(m) {
                     try {
-                        res.result = m.method.apply(m.target, req.params); 
-                    } catch (e) {
-                        res.error = e; 
+                        if(!req.params) req.params = [];
+                        req.params.push(msg);
+                        result = m.method.apply(m.target, req.params);
+                        status = 200; //OK 
+                    } catch (e) { 
+                        result = e; 
                     }  
-                } else {
-                    res.error = "method(" + key + ") not found";
+                } else { 
+                    result = "method(" + key + ") not found";
                 } 
             } catch (e) {
-                res.error = e; 
-            } finally {   
+                result = e; 
+            } finally {    
+                if(result.__http__){ //specail case for HTTP message response
+                    delete result.__http__;
+                    result.id = resMsg.id;
+                    result.recver = resMsg.recver;
+                    result.topic = resMsg.topic;
+                    if(!result.status){
+                        result.status = 200;
+                    }
+                    resMsg = result;
+                } else {
+                    resMsg.status = status;
+                    resMsg.body = result;
+                }
+                
                 try { client.route(resMsg); } catch (e) { }
             }
         }
@@ -1586,11 +1639,16 @@ class ServiceBootstrap {
         if(!this.topic){
             throw new Error("Missing serviceName");
         }  
+        var consumeGroup = this.topic;
+        if(this.consume_group != null){
+            consumeGroup = this.consume_group;
+        }
         var consumeCtrl = {
             topic: this.topic,
+            consume_group: consumeGroup,
             topic_mask: Protocol.MASK_MEMORY | Protocol.MASK_RPC,
             token: this.token
-        };
+        }; 
         this.consumer = new Consumer(this.broker, consumeCtrl);
         this.consumer.messageHandler = this.processor.messageHandler;
         this.consumer.connectionCount = this.connectionSize; 
@@ -1633,32 +1691,64 @@ class ServiceBootstrap {
 
 
 class ClientBootstrap {
-    constructor(){ 
-        this.broker = new Broker();  
+    constructor(){  
+        this.broker = null;
+        this.httpClient = null;
+        this.topic = null;
+        this.token = null;
     }   
+
     serviceAddress(address){
-        this.broker._addTracker(address);
+        this.serverAddress = address; //address list also support when in MQ mode 
         return this;
     }
+
     serviceName(name) {
         this.topic = name;
         return this;
     } 
+
     serviceToken(token){
         this.token = token;
         return this;
     }   
+
     invoker(){
-        var ctrl = {
-            topic: this.topic,
-            token: this.token
-        };
-        return new RpcInvoker(this.broker, ctrl);
+        var ctrl = { };
+        if(this.token != null){
+            ctrl.token = this.token;
+        }
+
+        if(this.serverAddress == null){
+            if(window != undefined){
+                var url = window.location.href;
+                var arr = url.split("/");
+                this.serverAddress = arr[2];
+            } else {
+                throw 'serverAddress missing';
+            }
+        }
+
+        if(this.topic != null) {//MQ mode
+            ctrl.topic = this.topic;
+            if(this.broker == null){
+                this.broker = new Broker();
+                this.broker._addTracker(this.serverAddress);
+            } 
+            return new RpcInvoker(this.broker, ctrl);
+        } 
+
+        this.httpClient = new MqClient(this.serverAddress); 
+        return new RpcInvoker(this.httpClient, ctrl);  
     }
     close() { 
-        if(this.broker){
+        if(this.broker != null){
             this.broker.close();
             this.broker = null;
+        }
+        if(this.httpClient != null){
+            this.httpClient.close();
+            this.httpClient = null;
         }
     }
 }

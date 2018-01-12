@@ -1,4 +1,4 @@
-package io.zbus.rpc.bootstrap;
+package io.zbus.rpc.bootstrap.mq;
 
 import io.zbus.transport.ServerAddress;
 
@@ -6,6 +6,10 @@ public class SpringClientBootstrap extends ClientBootstrap {
 	
 	public void setServiceAddress(ServerAddress... tracker){
 		serviceAddress(tracker);
+	}
+	
+	public void setRequestTypeInfo(boolean requestTypeInfo){
+		requestTypeInfo(requestTypeInfo);
 	}
 	
 	public void setServiceAddress(String tracker){
@@ -18,5 +22,5 @@ public class SpringClientBootstrap extends ClientBootstrap {
 	 
 	public void setServiceToken(String token){  
 		serviceToken(token);
-	}  
+	}   
 }

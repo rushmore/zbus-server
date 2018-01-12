@@ -13,7 +13,7 @@ public class MqAdmin {
 	protected ServerSelector adminServerSelector;
 	 
 	protected String token; 
-	protected int invokeTimeout = 10000;  // 10 s
+	protected long invokeTimeout = 10000;  // 10 s
 	protected boolean verbose = false;
 	
 	public MqAdmin(MqConfig config){
@@ -57,8 +57,14 @@ public class MqAdmin {
 	} 
 	
 	public TopicInfo[] declareTopic(String topic) throws IOException, InterruptedException {
+		Topic t = new Topic();
+		t.setName(topic);
+		return declareTopic(t);
+	} 
+	
+	public TopicInfo[] declareTopic(Topic topic) throws IOException, InterruptedException {
 		Message msg = new Message();
-		msg.setTopic(topic); 
+		topic.writeToMessage(msg);
 		MqClientPool[] pools = broker.selectClient(this.adminServerSelector, msg);
 		 
 		TopicInfo[] res = new TopicInfo[pools.length];
@@ -145,9 +151,15 @@ public class MqAdmin {
 	} 
 	
 	public ConsumeGroupInfo[] declareGroup(String topic, ConsumeGroup group) throws IOException, InterruptedException {
+		Topic t = new Topic();
+		t.setName(topic);
+		return declareGroup(t, group);
+	} 
+	
+	public ConsumeGroupInfo[] declareGroup(Topic topic, ConsumeGroup group) throws IOException, InterruptedException {
 		Message msg = new Message();
-		msg.setTopic(topic);
-		msg.setConsumeGroup(group.getGroupName());
+		topic.writeToMessage(msg);
+		group.writeToMessage(msg);
 		
 		MqClientPool[] pools = broker.selectClient(this.adminServerSelector, msg);
 		 

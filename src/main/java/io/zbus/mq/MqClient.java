@@ -23,15 +23,20 @@ import io.zbus.transport.tcp.TcpClient;
 import io.zbus.transport.tcp.TcpClient.HeartbeatMessageBuilder;
  
 
-public class MqClient extends CompositeClient<Message, Message>{         
+public class MqClient extends CompositeClient<Message, Message> {         
 	protected String token;      
-	protected int invokeTimeout = 3000;
-	protected int hearbeatInterval = 60000; //60s
+	protected long invokeTimeout = 3000;
+	protected long heartbeatInterval = 60000; //60s 
 	
 	public MqClient(String address, final EventLoop loop){
 		ServerAddress serverAddress = new ServerAddress(address);
-		buildSupport(serverAddress, loop);
+		buildSupport(serverAddress, loop, heartbeatInterval);
 	}   
+	
+	public MqClient(String address, final EventLoop loop, int heartbeatInterval){
+		ServerAddress serverAddress = new ServerAddress(address);
+		buildSupport(serverAddress, loop, heartbeatInterval);
+	}
 	
 	/**
 	 * In-Process MqClient, optimized for speed.
@@ -42,14 +47,18 @@ public class MqClient extends CompositeClient<Message, Message>{
 		ServerAddress serverAddress = new ServerAddress();
 		serverAddress.setServer(mqServer);
 		
-		buildSupport(serverAddress, null);
+		buildSupport(serverAddress, null, heartbeatInterval);
 	} 
 	
 	public MqClient(ServerAddress serverAddress, final EventLoop loop){  
-		buildSupport(serverAddress, loop);
+		buildSupport(serverAddress, loop, heartbeatInterval);
 	}
 	
-	private void buildSupport(ServerAddress serverAddress, final EventLoop loop){
+	public MqClient(ServerAddress serverAddress, final EventLoop loop, long heartbeatInterval){  
+		buildSupport(serverAddress, loop, heartbeatInterval);
+	}
+	
+	private void buildSupport(ServerAddress serverAddress, final EventLoop loop, long heartbeatInterval){
 		this.token = serverAddress.getToken();
 		if(serverAddress.server != null){
 			support = new InProcClient<Message, Message>(serverAddress.server);
@@ -83,7 +92,7 @@ public class MqClient extends CompositeClient<Message, Message>{
 			}
 		}); 
 		
-		tcp.startHeartbeat(hearbeatInterval, new HeartbeatMessageBuilder<Message>() { 
+		tcp.startHeartbeat(heartbeatInterval, new HeartbeatMessageBuilder<Message>() { 
 			@Override
 			public Message build() { 
 				Message hbt = new Message();
@@ -94,11 +103,11 @@ public class MqClient extends CompositeClient<Message, Message>{
 	}
 	
 	
-	public void setInvokeTimeout(int invokeTimeout) {
+	public void setInvokeTimeout(long invokeTimeout) {
 		this.invokeTimeout = invokeTimeout;
 	}
 	
-	public Message produce(Message msg, int timeout) throws IOException, InterruptedException{ 
+	public Message produce(Message msg, long timeout) throws IOException, InterruptedException{ 
 		msg.setCommand(Protocol.PRODUCE);
 		return invokeSync(msg, timeout);  
 	} 
@@ -113,19 +122,30 @@ public class MqClient extends CompositeClient<Message, Message>{
 	}
 	
 	public Message consume(String topic) throws IOException, InterruptedException{
-		return consume(topic, null, null);
+		ConsumeCtrl ctrl = new ConsumeCtrl();
+		ctrl.setTopic(topic);
+		ctrl.setConsumeGroup(topic); 
+		return consume(ctrl);
 	}
 	
-	public Message consume(String topic, String group) throws IOException, InterruptedException {
-		return consume(topic, group, null);
-	}
-	 
-	public Message consume(String topic, String group, Integer window) throws IOException, InterruptedException {
+	public Message consume(String topic, String group) throws IOException, InterruptedException { 
+		ConsumeCtrl ctrl = new ConsumeCtrl();
+		ctrl.setTopic(topic);
+		ctrl.setConsumeGroup(group); 
+		return consume(ctrl);
+	} 
+	
+	public Message consume(ConsumeCtrl ctrl) throws IOException, InterruptedException {
+		if(ctrl.getTopic() == null) {
+			throw new IllegalArgumentException("Missing topic");
+		}
+		
 		Message msg = new Message();
 		msg.setCommand(Protocol.CONSUME);
-		msg.setTopic(topic);
-		msg.setConsumeGroup(group);  
-		msg.setConsumeWindow(window); 
+		msg.setTopic(ctrl.getTopic());
+		msg.setConsumeGroup(ctrl.getConsumeGroup());
+		msg.setOffset(ctrl.getOffset());
+		msg.setConsumeWindow(ctrl.getConsumeWindow()); 
 		
 		Message res = invokeSync(msg, invokeTimeout);
 		if (res == null) return res;
@@ -133,23 +153,45 @@ public class MqClient extends CompositeClient<Message, Message>{
 		res.setId(res.getOriginId());
 		res.removeHeader(Protocol.ORIGIN_ID); 
 		return res;
-	}  
-	
-	public Message unconsume(String topic) throws IOException, InterruptedException {
-		return unconsume(topic, null);
 	}
 	
-	public Message unconsume(String topic, String group) throws IOException, InterruptedException {
+	public void unconsume(String topic) throws IOException, InterruptedException {
+		unconsume(topic, topic);
+	}
+	
+	public void unconsume(String topic, String group) throws IOException, InterruptedException {
 		Message msg = new Message();
 		msg.setCommand(Protocol.UNCONSUME);
 		msg.setTopic(topic);
 		msg.setConsumeGroup(group);   
-		
-		Message res = invokeSync(msg, invokeTimeout);
-		res.setId(res.getOriginId());
-		res.removeHeader(Protocol.ORIGIN_ID); 
-		return res;
+		invokeAsync(msg, null); 
 	}
+	
+	public void ack(Message res) throws IOException {
+		Message msg = new Message();
+		msg.setCommand(Protocol.ACK);
+		msg.setTopic(res.getTopic());
+		msg.setConsumeGroup(res.getConsumeGroup());     
+		msg.setOffset(res.getOffset());
+		
+		try {
+			invokeSync(msg);
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		} 
+	}
+	
+	public void ackAsync(Message res) throws IOException {
+		Message msg = new Message();
+		msg.setCommand(Protocol.ACK);
+		msg.setTopic(res.getTopic());
+		msg.setConsumeGroup(res.getConsumeGroup());   
+		msg.setOffset(res.getOffset());
+		
+		msg.setAck(false); //No need to reply from server, Not ACK command.
+		invokeAsync(msg, null); 
+	}
+	 
 	
 	public TrackerInfo queryTracker() throws IOException, InterruptedException{
 		Message msg = new Message();
@@ -202,31 +244,31 @@ public class MqClient extends CompositeClient<Message, Message>{
 	
 	
 	public TopicInfo declareTopic(String topic) throws IOException, InterruptedException{
-		return declareTopic(topic, null);
-	}
+		Topic ctrl = new Topic();
+		ctrl.setName(topic);
+		return declareTopic(ctrl);
+	} 
 	
-	public TopicInfo declareTopic(String topic, Integer topicMask) throws IOException, InterruptedException{
+	public TopicInfo declareTopic(Topic topic) throws IOException, InterruptedException{
 		Message msg = new Message();
 		msg.setCommand(Protocol.DECLARE);
-		msg.setTopic(topic); 
-		msg.setTopicMask(topicMask);
+		topic.writeToMessage(msg);
 		 
 		Message res = invokeSync(msg, invokeTimeout);
 		return parseResult(res, TopicInfo.class); 
 	}
 	
 	public ConsumeGroupInfo declareGroup(String topic, ConsumeGroup group) throws IOException, InterruptedException{
+		Topic t = new Topic();
+		t.setName(topic);
+		return declareGroup(t, group);
+	}
+	 
+	public ConsumeGroupInfo declareGroup(Topic topic, ConsumeGroup group) throws IOException, InterruptedException{
 		Message msg = new Message();
 		msg.setCommand(Protocol.DECLARE);
-		msg.setTopic(topic);
-		msg.setConsumeGroup(group.getGroupName());
-		msg.setGroupStartCopy(group.getStartCopy());
-		msg.setGroupFilter(group.getFilter());
-		msg.setGroupStartMsgId(group.getStartMsgId());
-		msg.setGroupStartOffset(group.getStartOffset()); 
-		msg.setGroupStartTime(group.getStartTime());
-		msg.setTopicMask(group.getMask());
-		
+		topic.writeToMessage(msg);
+		group.writeToMessage(msg); 
 		
 		Message res = invokeSync(msg, invokeTimeout);
 		return parseResult(res, ConsumeGroupInfo.class); 
@@ -275,7 +317,7 @@ public class MqClient extends CompositeClient<Message, Message>{
 		invokeAsync(msg, null);  
 	}  
 	
-	public Message invokeSync(Message msg, int timeout) throws IOException, InterruptedException {
+	public Message invokeSync(Message msg, long timeout) throws IOException, InterruptedException {
 		fillCommonHeaders(msg);
 		return super.invokeSync(msg, timeout);
 	}
@@ -321,5 +363,5 @@ public class MqClient extends CompositeClient<Message, Message>{
 
 	public void setToken(String token) {
 		this.token = token;
-	} 
+	}  
 }

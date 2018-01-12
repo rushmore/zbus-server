@@ -22,13 +22,18 @@
  */
 package io.zbus.rpc;
 
-import io.zbus.mq.Message;
-
+import io.zbus.transport.http.Message;
 
 public interface RpcCodec {
 	Message  encodeRequest(Request request, String encoding); 
-	Message  encodeResponse(Response response, String encoding); 
+	Message  encodeResponse(Object response, String encoding); 
 	Request  decodeRequest(Message msg); 
-	Response decodeResponse(Message msg);  
-	<T> T convert(Object value, Class<T> clazz);
+	Object decodeResponse(Message msg);  
+	
+	<T> T convert(Object value, Class<T> clazz); 
+	void setRequestTypeInfo(boolean requestTypeInfo); //encoding info includes Type info, e.g. Class info
+	void setResponseTypeInfo(boolean responseTypeInfo);   //encoding info includes Type info, e.g. Class info
+	
+	public static final int STATUS_OK = 200;
+	public static final int STATUS_APP_ERROR = 600; //extension of HTTP status
 }

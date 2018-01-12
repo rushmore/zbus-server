@@ -1,10 +1,11 @@
 package io.zbus.examples.rpc;
 
 import io.zbus.examples.rpc.biz.InterfaceExample;
+import io.zbus.examples.rpc.biz.TestCases;
 import io.zbus.examples.rpc.biz.generic.GenericMethod;
 import io.zbus.examples.rpc.biz.inheritance.SubServiceInterface1;
 import io.zbus.examples.rpc.biz.inheritance.SubServiceInterface2;
-import io.zbus.rpc.bootstrap.ClientBootstrap;
+import io.zbus.rpc.bootstrap.mq.ClientBootstrap;
 
 public class RpcClientFull {
 
@@ -18,7 +19,7 @@ public class RpcClientFull {
 		
 		ClientBootstrap b = new ClientBootstrap(); 
 		//b.serviceAddress(serverAddress)
-		b.serviceAddress("localhost:15555;localhost:15556") //Multiple servers, HA support!
+		b.serviceAddress("localhost:15555")//;localhost:15556") //Multiple servers, HA support!
 		 .serviceName("MyRpc")
 		 .serviceToken("myrpc_service"); 
 

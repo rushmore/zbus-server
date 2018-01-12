@@ -22,23 +22,20 @@
  */
 package io.zbus.rpc;
 
-import io.zbus.mq.Broker;
-import io.zbus.mq.ProducerConfig;
-
-public class RpcConfig extends ProducerConfig{   
-	protected String topic;
-	protected String module = "";  
-	protected String encoding = "UTF-8";  
-	protected RpcCodec codec; 
+public class RpcConfig {   
+	public MessageInvoker messageInvoker;
+	public String module = "";  
+	public String encoding = "UTF-8";  
+	public RpcCodec codec;  
+	public int timeout = 10000; //10s
+	public boolean verbose;
 	
-	public RpcConfig() {
-		super(); 
+	public MessageInvoker getMessageInvoker() {
+		return messageInvoker;
 	}
-	public RpcConfig(Broker broker, String topic) {
-		super(broker); 
-		this.topic = topic;
+	public void setMessageInvoker(MessageInvoker messageInvoker) {
+		this.messageInvoker = messageInvoker;
 	}
-	
 	public String getModule() {
 		return module;
 	}
@@ -50,17 +47,23 @@ public class RpcConfig extends ProducerConfig{
 	}
 	public void setEncoding(String encoding) {
 		this.encoding = encoding;
-	}
-	public String getTopic() {
-		return topic;
-	}
-	public void setTopic(String topic) {
-		this.topic = topic;
-	}
+	} 
 	public RpcCodec getCodec() {
 		return codec;
 	}
 	public void setCodec(RpcCodec codec) {
 		this.codec = codec;
-	}   
+	}
+	public int getTimeout() {
+		return timeout;
+	}
+	public void setTimeout(int timeout) {
+		this.timeout = timeout;
+	}
+	public boolean isVerbose() {
+		return verbose;
+	}
+	public void setVerbose(boolean verbose) {
+		this.verbose = verbose;
+	}    
 }

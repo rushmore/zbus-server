@@ -100,20 +100,7 @@ public class ConfigKit {
 	
 	public static Set<String> valueSet(Properties props, String name){ 
 		return split(value(props, name));
-	} 
-
-	public static Properties loadConfig(String fileName){ 
-		Properties props = new Properties();
-		try{
-			InputStream fis = FileKit.loadFile(fileName);
-			if(fis != null){
-				props.load(fis);
-			}
-		} catch(Exception e){ 
-			System.out.println("Missing config, using default empty");
-		}
-		return props;
-	}
+	}  
 	
 	public static String valueOf(String value, String defaultValue){
 		if(StrKit.isEmpty(value)) return defaultValue;

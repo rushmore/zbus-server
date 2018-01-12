@@ -3,6 +3,7 @@ package io.zbus.examples.mq.consumer.broadcast;
 import java.io.IOException;
 
 import io.zbus.mq.Broker;
+import io.zbus.mq.ConsumeGroup;
 import io.zbus.mq.Consumer;
 import io.zbus.mq.ConsumerConfig;
 import io.zbus.mq.Message;
@@ -20,9 +21,9 @@ public class ConsumerBroadcast {
 		Consumer[] consumers = new Consumer[10];
 		for(int i=0; i<consumers.length;i++){
 			ConsumerConfig config = new ConsumerConfig(broker);
-			config.setTopic("MyTopic");     
-			config.setConsumeGroup("Broadcast" + i); //ConsumeGroup name 
-			config.setConnectionCount(1);            //Demo only 1 connection for each consumer
+			config.setTopic("MyTopic");    
+			ConsumeGroup consumeGroup = ConsumeGroup.createTempBroadcastGroup(); //Group will be dropped if disconnected
+			config.setConsumeGroup(consumeGroup);
 			config.setMessageHandler(new MessageHandler() {  
 				@Override
 				public void handle(Message msg, MqClient client) throws IOException { 
@@ -30,8 +31,7 @@ public class ConsumerBroadcast {
 				}
 			});
 			
-			consumers[i] = new Consumer(config);
-			
+			consumers[i] = new Consumer(config); 
 		}
 		for(Consumer c : consumers){
 			c.start();

@@ -1,5 +1,6 @@
 package io.zbus.examples.rpc.biz;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -7,7 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import io.zbus.kit.FileKit;
+import io.zbus.kit.HttpKit;
+import io.zbus.rpc.Doc;
 import io.zbus.rpc.Remote;
+import io.zbus.transport.http.Message;
+import io.zbus.transport.http.Message.FileForm;
+import io.zbus.transport.http.Message.FileUpload;
 
 @Remote
 public class InterfaceExampleImpl implements InterfaceExample{
@@ -82,9 +89,17 @@ public class InterfaceExampleImpl implements InterfaceExample{
 		return new User[]{getUser("hong"), getUser("leiming")};
 	}
 	
-	
-	public Map<String, Object> map(int value1) {
-		HashMap<String, Object> res = new HashMap<String, Object>();
+	@Override
+	public List<User> listUsers() {
+		return Arrays.asList(getUser("hong"), getUser("leiming"));
+	}
+	 
+	@Doc("测试类") 
+	public Map<String, Object> map(
+		@Doc("size of map") 
+		int value1
+	) {
+		Map<String, Object> res = new HashMap<String, Object>();
 		res.put("key1", value1);
 		res.put("key2", "value2");
 		res.put("key3", 2.5);
@@ -155,6 +170,107 @@ public class InterfaceExampleImpl implements InterfaceExample{
 	@Override
 	public String nullParam(String nullStr) { 
 		return nullStr;
+	}
+	
+	@Override
+	public Message raw(String name) {
+		Message message = new Message();
+		message.setBody(name);
+		return message;
+	}
+	
+	@Override
+	public Message raw0(Message req) { 
+		req.setBody("raw requested " + System.currentTimeMillis());
+		return req;
+	}
+	
+	@Override
+	public Message raw1(int i, Message req) {
+		Message res = new Message();
+		res.setBody(i + ":" + req.getHeader("topic"));
+		return res;
+	}
+	
+	@Override
+	public Message redirect() {
+		Message res = new Message();
+		res.setStatus(302);
+		res.setHeader("location", "/");
+		return res;
+	}
+	
+	public String getPath(String urlPath){
+		return urlPath;
+	}
+	
+	public Message file(Message request) {
+		String url = request.getUrl(); // /static/resource/app.js 
+		boolean hasTopic = request.getHeader("topic") != null;
+		String resource = HttpKit.rpcUrl(url, hasTopic);
+		
+		Message res = new Message();
+		res.setStatus(200);
+		try {
+			byte[] data = FileKit.loadFileBytes(resource);
+			res.setBody(data); 
+			String contentType = HttpKit.contentType(resource);
+			if(contentType == null){
+				contentType = "text/plain";
+			}
+			res.setHeader("content-type", contentType); 
+		} catch (IOException e) {
+			res.setStatus(404);
+			res.setBody(e.getMessage());
+		}
+		return res;
+	} 
+	
+	/**
+	 * 
+	 * Default method(method in URL missing)
+	 * 
+	 * @return page
+	 */
+	public Message index() {  
+		Message res = new Message();
+		res.setStatus(200); 
+		res.setBody("Index page");
+		return res;
+	} 
+	
+	@Override
+	public Message showUpload() { 
+		Message res = new Message();
+		res.setStatus(200);
+		try {
+			byte[] data = FileKit.loadFileBytes("rpc/upload.htm");
+			res.setBody(data);  
+			res.setHeader("content-type", "text/html"); 
+		} catch (IOException e) {
+			res.setStatus(404);
+			res.setBody(e.getMessage());
+		}
+		return res;
+	}
+	
+	@Override
+	public boolean upload(Message request) { 
+		FileForm fileForm = request.getFileForm();
+		if(fileForm == null) return false;
+		System.out.println("Key-Value pairs");
+		for(String key : fileForm.attributes.keySet()){
+			System.out.println(key + "=>" + fileForm.attributes.get(key));
+		}
+		System.out.println("Files");
+		for(String key : fileForm.files.keySet()){
+			List<FileUpload> files = fileForm.files.get(key);
+			for(FileUpload file : files){
+				System.out.println("FileName: " + file.fileName);
+				System.out.println(new String(file.data));
+			}
+		}
+		return true;
 	}
 }
 

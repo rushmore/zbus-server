@@ -3,43 +3,35 @@ package io.zbus.mq;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeUnit;
 
+import io.zbus.kit.ThreadKit.ManualResetEvent;
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
+import io.zbus.mq.Protocol.ConsumeGroupInfo;
 
 public class ConsumeThread implements Closeable{
 	private static final Logger log = LoggerFactory.getLogger(ConsumeThread.class);  
-	protected final MqClient client;
+	protected final MqClient client; 
 	
-	protected String topic;  
-	protected String token;
-	protected ConsumeGroup consumeGroup;
-	protected int consumeTimeout = 10000;
-	protected Integer consumeWindow;
-	
-	protected ExecutorService consumeRunner;
+	protected Topic topic;
+	protected ConsumeGroup consumeGroup; 
+	protected ConsumeCtrl consumeCtrl; 
+	protected boolean declareOnMissing = true;
+	protected String token; 
 	protected MessageHandler messageHandler;
 	
-	protected AtomicReference<CountDownLatch> pause = new AtomicReference<CountDownLatch>(new CountDownLatch(0));
+	protected ManualResetEvent active = new ManualResetEvent(true); 
 	
-	protected Thread consumeThread;
+	protected RunningThread consumeThread;
 	 
-	public ConsumeThread(MqClient client, String topic, ConsumeGroup group){
+	public ConsumeThread(MqClient client, Topic topic, ConsumeGroup group, ConsumeCtrl consumeCtrl){
 		this.client = client;
 		this.topic = topic;
 		this.consumeGroup = group;
+		this.consumeCtrl = consumeCtrl;
 	}
-	
-	public ConsumeThread(MqClient client, String topic){
-		this(client, topic, null);
-	}
-	
-	public ConsumeThread(MqClient client){
-		this(client, null);
-	}
+	 
 	 
 	public synchronized void start() {
 		start(false);
@@ -53,64 +45,76 @@ public class ConsumeThread implements Closeable{
 			throw new IllegalStateException("Missing consumeHandler");
 		}
 		if(pauseOnStart){
-			pause.set(new CountDownLatch(1));
-		}
-		
-		if(this.consumeGroup == null){
-			this.consumeGroup = new ConsumeGroup();
-			consumeGroup.setGroupName(this.topic);
-		}  
+			active.reset();
+		} 
 		this.client.setToken(token);
-		this.client.setInvokeTimeout(consumeTimeout);
-		try {
-			this.client.declareGroup(topic, consumeGroup);
-		} catch (IOException e) { 
-			log.error(e.getMessage(), e);
-		} catch (InterruptedException e) { 
-			log.error(e.getMessage(), e);
-		}
+		this.client.setInvokeTimeout(consumeCtrl.getConsumeTimeout());
 		
-		
-		consumeThread = new Thread(new Runnable() { 
-			@Override
-			public void run() { 
-				ConsumeThread.this.run();
+		if(declareOnMissing){
+			try { 
+				ConsumeGroupInfo info = this.client.declareGroup(topic, consumeGroup); 
+				consumeCtrl.setConsumeGroup(info.groupName); //update groupName
+			} catch (IOException e) { 
+				log.error(e.getMessage(), e);
+			} catch (InterruptedException e) { 
+				log.error(e.getMessage(), e);
 			}
-		});
+		} 
+		
+		consumeThread = new RunningThread();
 		consumeThread.start();
 	}
 	
 	public void pause(){
 		try {
-			client.unconsume(topic, this.consumeGroup.getGroupName()); //stop consuming in serverside
+			client.unconsume(topic.getName(), consumeCtrl.getConsumeGroup()); //stop consuming in server side
+			consumeThread.running = false;
+			consumeThread.interrupt();
+			
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 		}  
 		
-		pause.set(new CountDownLatch(1));
+		active.reset();
 	}
 	
-	public void resume(){
-		pause.get().countDown();
+	public void resume(){  
+		active.set();
+		if(consumeThread == null || !consumeThread.running) {
+			consumeThread = new RunningThread();
+			consumeThread.start();
+		}
 	}
 	
 	public Message take() throws IOException, InterruptedException {  
 		Message res = null;
 		try {  
-			res = client.consume(topic, this.consumeGroup.getGroupName(), this.getConsumeWindow()); 
+			res = client.consume(consumeCtrl); 
 			if (res == null) return res; 
 			Integer status = res.getStatus();
-			if (status == 404) {
-				client.declareGroup(topic, consumeGroup); 
+			if (status == 404) { 
+				if(!declareOnMissing){
+					throw new MqException(res.getBodyString());
+				}
+				ConsumeGroupInfo info = client.declareGroup(topic, consumeGroup);
+				consumeCtrl.setConsumeGroup(info.groupName); //update groupName
 				return take();
 			}
 			
 			if (status == 200) { 
+				
+				String method = res.getOriginMethod();
+				if(method != null){
+					res.setMethod(method);
+					res.removeHeader(Protocol.ORIGIN_METHOD);
+				}
+				
 				String originUrl = res.getOriginUrl();
 				if(originUrl != null){ 
 					res.removeHeader(Protocol.ORIGIN_URL);
 					res.setUrl(originUrl);   
 					res.setStatus(null);
+					
 					return res;
 				}
 				
@@ -130,115 +134,79 @@ public class ConsumeThread implements Closeable{
 			throw new InterruptedException(e.getMessage());
 		}   
 	} 
-	 
-	protected void run() {   
-		while (true) {
-			try { 
-				final Message msg;
-				try {
-					pause.get().await(); //check is paused
-					msg = take();
-					if(msg == null) continue;
-					
-					if(messageHandler == null){
-						throw new IllegalStateException("Missing ConsumeHandler");
-					}
-					
-					if(consumeRunner == null){
+	
+	
+	class RunningThread extends Thread {
+		volatile boolean running = true; 
+		
+		public void run() { 
+			while (running) {
+				try { 
+					final Message msg;
+					try {
+						while(running){
+							active.await(1000, TimeUnit.MILLISECONDS); 
+							if(active.isSignalled()) break;
+						}
+						if(!running) break; 
+						msg = take();
+						if(msg == null) continue; 
+						if(!running) break;
+						
+						if(messageHandler == null){
+							throw new IllegalStateException("Missing ConsumeHandler");
+						}
+						
 						try{
 							messageHandler.handle(msg, client);
 						} catch (Exception e) {
 							log.error(e.getMessage(), e);
-						}
-					} else {
-						consumeRunner.submit(new Runnable() { 
-							@Override
-							public void run() {
-								try{
-									messageHandler.handle(msg, client);
-								} catch (Exception e) {
-									log.error(e.getMessage(), e);
-								}
-							}
-						});
-					}
+						} 
+						
+					} catch (InterruptedException e) {
+						client.close(); 
+						break;
+					}  
 					
-				} catch (InterruptedException e) {
-					client.close(); 
-					break;
-				}  
-				
-			} catch (IOException e) {  
-				log.error(e.getMessage(), e);  
+				} catch (IOException e) {  
+					log.error(e.getMessage(), e);  
+				}
 			}
 		}
-		
 	}
+	  
 
 	@Override
 	public void close() throws IOException {
 		consumeThread.interrupt();  
-	} 
-
-	public ExecutorService getConsumeRunner() {
-		return consumeRunner;
-	}
-
-	public void setConsumeRunner(ExecutorService consumeRunner) {
-		this.consumeRunner = consumeRunner;
-	}
-
-	public void setConsumeTimeout(int consumeTimeout) {
-		this.consumeTimeout = consumeTimeout;
-	}
-
+	}  
+	
 	public void setMessageHandler(MessageHandler messageHandler) {
 		this.messageHandler = messageHandler;
 	} 
-	
-	public String getTopic() {
-		return topic;
-	}
-
-	public void setTopic(String topic) {
-		this.topic = topic;
-	}  
-	
+	 
 	public String getToken() {
 		return token;
 	}
 
 	public void setToken(String token) {
 		this.token = token;
-	}
-
-	public ConsumeGroup getConsumeGroup() {
-		return consumeGroup;
-	}
-
-	public void setConsumeGroup(ConsumeGroup consumeGroup) {
-		this.consumeGroup = consumeGroup;
-	}
-
-	public int getConsumeTimeout() {
-		return consumeTimeout;
-	}
+	}  
 
 	public MessageHandler getMessageHandler() {
 		return messageHandler;
+	}  
+	
+	public boolean isDeclareOnMissing() {
+		return declareOnMissing;
+	} 
+
+	public void setDeclareOnMissing(boolean declareOnMissing) {
+		this.declareOnMissing = declareOnMissing;
 	}
 
-	public Integer getConsumeWindow() {
-		return consumeWindow;
-	}
-
-	public void setConsumeWindow(Integer consumeWindow) {
-		this.consumeWindow = consumeWindow;
-	}
 
 	public MqClient getClient() {
 		return client;
 	} 
-	
-	
 }

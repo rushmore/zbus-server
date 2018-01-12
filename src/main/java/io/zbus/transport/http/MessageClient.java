@@ -17,7 +17,7 @@ import io.zbus.transport.tcp.TcpClient;
 import io.zbus.transport.tcp.TcpClient.HeartbeatMessageBuilder;
 
 public class MessageClient extends CompositeClient<Message, Message>{ 
-	protected int hearbeatInterval = 60000; //60s
+	protected int heartbeatInterval = 60000; //60s
 	
 	public MessageClient(ServerAddress address, final EventLoop loop){
 		initSupport(address, loop);
@@ -55,7 +55,7 @@ public class MessageClient extends CompositeClient<Message, Message>{
 			}
 		}); 
 		
-		tcp.startHeartbeat(hearbeatInterval, new HeartbeatMessageBuilder<Message>() { 
+		tcp.startHeartbeat(heartbeatInterval, new HeartbeatMessageBuilder<Message>() { 
 			@Override
 			public Message build() { 
 				Message hbt = new Message();

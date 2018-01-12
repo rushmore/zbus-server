@@ -6,14 +6,14 @@ import io.zbus.mq.Producer;
 
 public class ProducerExample { 
 	public static void main(String[] args) throws Exception { 
-		Broker broker = new Broker("localhost:15555"); 
+		Broker broker = new Broker("zbus.io:15555"); //!!!Share it in Application!!!
 		  
 		Producer p = new Producer(broker);
-		p.declareTopic("MyMQ"); 
+		p.declareTopic("MyTopic"); 
 		 
 		Message msg = new Message();
-		msg.setTopic("MyMQ");
-		//msg.setTag("oo.account.pp");
+		msg.setTopic("MyTopic");
+		//msg.setTag("oo.account.pp");  //set tag for Consumer's filter
 		msg.setBody("hello " + System.currentTimeMillis()); 
 		
 		Message res = p.publish(msg);

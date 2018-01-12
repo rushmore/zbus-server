@@ -2,11 +2,11 @@ package io.zbus.mq.disk;
 
 public class DiskMessage {
 	public Long offset; // 8, write ignore
-	public Long timestamp; // 8
+	public Long checksum; // 8
 	public String id; // 1 + id(max 39)
-	public Long corrOffset; // 8
+	public Long timestamp; // 8
 	public Long messageNumber; // 8, write ignore
-	public String tag; // 1 + tag(max 127)
+	public String tag; // 1 + tag(max 127) 
 	public byte[] body; // 4 + len 
 
 	public int size(){
@@ -21,4 +21,5 @@ public class DiskMessage {
 	public static final int ID_MAX_LEN = 39;
 	public static final int TAG_MAX_LEN = 127;
 	public static final int BODY_POS = 8 + 8 + 40 + 8 + 8 + 128; //200
+	public static final int CHECKSUM_SIZE = 40 + 8 + 8 + 128; 
 }

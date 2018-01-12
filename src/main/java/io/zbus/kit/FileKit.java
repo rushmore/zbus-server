@@ -43,20 +43,11 @@ public class FileKit {
 	private final static Map<String, String> cache = new ConcurrentHashMap<String, String>();
 	private static boolean enableCache = true;
 	
-	public static InputStream inputStream(String filePath){
-		File file = new File(filePath);
-		if(file.exists()){
-			try {
-				return new FileInputStream(file);
-			} catch (FileNotFoundException e) {
-				return null;
-			}
-		} 
-		return FileKit.class.getClassLoader().getResourceAsStream(filePath);
-	}
-	 
+	public static void setCache(boolean value) {
+		enableCache = value;
+	}  
 	
-	public static InputStream loadFile(String resource) throws IOException {
+	public static InputStream inputStream(String resource) {
 		ClassLoader classLoader = null;
 		try {
 			Method method = Thread.class.getMethod("getContextClassLoader");
@@ -72,22 +63,21 @@ public class FileKit {
 			if (classLoader != null) {
 				URL url = classLoader.getResource(resource);
 				if (url == null) {
-					throw new IOException("Can not find resource:" + resource);  
-				}
-				
+					return new FileInputStream(new File(resource));
+				} 
 				if (url.toString().startsWith("jar:file:")) {
 					return FileKit.class.getResourceAsStream(resource.startsWith("/") ? resource : "/" + resource);
 				} else {
 					return new FileInputStream(new File(url.toURI()));
 				}
-			}
-			throw new IOException("Missing file: " + resource); 
+			} 
 		} catch (Exception e) {
-			throw new IOException(e.getMessage(), e.getCause()); 
+			//ignore
 		} 
+		return null;
 	}
 
-	public static String renderFile(String resource) throws IOException {
+	public static String loadFile(String resource) throws IOException {
 		if(enableCache && cache.containsKey(resource)){
 			return cache.get(resource);
 		}
@@ -120,18 +110,15 @@ public class FileKit {
 	}
 	 
 	
-	public static String renderFile(String resource, Map<String, Object> model) throws IOException {
-		String template = renderFile(resource);
+	public static String loadFile(String resource, Map<String, Object> model) throws IOException {
+		String template = loadFile(resource);
 		if(model == null) return template; 
 		
 		for(Entry<String, Object> e : model.entrySet()){
 			String key = e.getKey();
 			Object val = e.getValue();
 			
-			key = "\\{\\{"+key+"\\}\\}";
-			if(val instanceof String){
-				val = "\"" + val + "\"";
-			}
+			key = "\\{\\{"+key+"\\}\\}"; 
 			if(val == null){
 				val = "";
 			}
@@ -139,28 +126,26 @@ public class FileKit {
 		}
 		
 		return template;
-	}
-	 
+	} 
 	
 	public static byte[] loadFileBytes(String resource) throws IOException {
-		InputStream in = FileKit.class.getClassLoader().getResourceAsStream(resource);
+		InputStream in = inputStream(resource);
 		if (in == null)
-			return null;
+			throw new FileNotFoundException("File(" + resource + ") Not Found");
 
-		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-		int nRead;
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream(); 
 		byte[] data = new byte[1024];
 		try {
+			int nRead;
 			while ((nRead = in.read(data, 0, data.length)) != -1) {
 				buffer.write(data, 0, nRead);
-			}
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
+			} 
 		} finally {
 			try {
+				buffer.close();
 				in.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				//ignore
 			}
 		}
 		return buffer.toByteArray();

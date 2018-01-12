@@ -66,10 +66,21 @@ public class Broker implements Closeable {
 		}
 	} 
 	
+	public Broker(String trackerList, String token){
+		this.eventLoop = new EventLoop();  
+		
+		String[] bb = trackerList.split("[,; ]");
+		for(String tracker : bb){
+			tracker = tracker.trim();
+			if(tracker.isEmpty()) continue; 
+			addTracker(tracker, token);
+		}
+	} 
+	
 	public Broker(ServerAddress trackerAddress){
 		this.eventLoop = new EventLoop();  
 		addTracker(trackerAddress); 
-	} 
+	}  
 	
 	public Broker(MqServer server){
 		this(server, null);
@@ -93,10 +104,14 @@ public class Broker implements Closeable {
 	}  
 	 
 	public void addTracker(String trackerAddress){
-		ServerAddress serverAddress = new ServerAddress(trackerAddress);  
-		addTracker(serverAddress);
+		addTracker(trackerAddress, null);
 	} 
 	
+	public void addTracker(String trackerAddress, String token){
+		ServerAddress serverAddress = new ServerAddress(trackerAddress);  
+		serverAddress.token = token;
+		addTracker(serverAddress);
+	}   
 	
 	public void addTracker(ServerAddress serverAddress){
 		final ServerAddress trackerAddress = serverAddress.clone();

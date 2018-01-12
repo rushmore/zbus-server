@@ -17,7 +17,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
-import io.zbus.kit.StrKit;
+import io.zbus.kit.NetKit;
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.transport.AbstractClient;
@@ -47,7 +47,7 @@ public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<RE
 	public TcpClient(String address, EventLoop loop){   
 		group = loop.getGroup(); 
 		
-		Object[] hp = StrKit.hostPort(address);
+		Object[] hp = NetKit.hostPort(address);
 		this.host = (String)hp[0];
 		this.port = (Integer)hp[1]; 
 	} 
@@ -55,7 +55,7 @@ public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<RE
 	public TcpClient(ServerAddress serverAddress, EventLoop loop){   
 		this.group = loop.getGroup();
 		
-		Object[] hp = StrKit.hostPort(serverAddress.address);
+		Object[] hp = NetKit.hostPort(serverAddress.address);
 		this.host = (String)hp[0];
 		this.port = (Integer)hp[1]; 
 		
@@ -146,7 +146,7 @@ public class TcpClient<REQ extends Id, RES extends Id> extends AbstractClient<RE
 		} 
 	}   
 	
-	public synchronized void startHeartbeat(int intervalInMillis, HeartbeatMessageBuilder<REQ> builder){
+	public synchronized void startHeartbeat(long intervalInMillis, HeartbeatMessageBuilder<REQ> builder){
 		this.heartbeatMessageBuilder = builder;
 		if(heartbeator == null){
 			heartbeator = Executors.newSingleThreadScheduledExecutor();

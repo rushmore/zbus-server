@@ -88,7 +88,7 @@ public class MessageAdaptor extends ServerAdaptor{
     	sess.write(res); 
     }  
     
-    private void handleUrlMessage(Message msg){ 
+    protected void handleUrlMessage(Message msg){ 
     	if(msg.getCommand() != null){
     		return;
     	} 

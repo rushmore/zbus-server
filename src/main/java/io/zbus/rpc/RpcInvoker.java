@@ -30,68 +30,44 @@ import java.lang.reflect.Proxy;
 
 import io.zbus.kit.JsonKit;
 import io.zbus.kit.logging.Logger;
-import io.zbus.kit.logging.LoggerFactory;
-import io.zbus.mq.Broker;
-import io.zbus.mq.Message;
-import io.zbus.mq.Producer;
+import io.zbus.kit.logging.LoggerFactory; 
 import io.zbus.transport.ResultCallback;
+import io.zbus.transport.http.Message;
 
 public class RpcInvoker {  
-	private static final Logger log = LoggerFactory.getLogger(RpcInvoker.class); 
-	 
-	private final Producer producer;
-	private final String topic;  
+	private static final Logger log = LoggerFactory.getLogger(RpcInvoker.class);  
 	private String module;  
 	private String encoding = "UTF-8";  
 	private int timeout;
 	private boolean verbose;
 	
 	private RpcCodec codec; 
+	private MessageInvoker messageInvoker;
 	
-	public RpcInvoker(Broker broker, String topic){
-		this(new RpcConfig(broker, topic));
-	}
-	
-	public RpcInvoker(RpcConfig config){ 
-		this.topic = config.getTopic(); 
-		if(this.topic == null){
-			throw new IllegalArgumentException("Missing topic in config");
-		}
-		
-		this.codec = config.getCodec();
-		if(this.codec == null){
-			this.codec = new JsonRpcCodec(); //default to JsonRpc
-		}
+	public RpcInvoker(RpcConfig config) {
+		this.messageInvoker = config.getMessageInvoker();
 		this.module = config.getModule(); 
-		this.encoding = config.getEncoding(); 
-		this.timeout = config.getInvokeTimeout();
+		this.codec = config.getCodec();
+		this.timeout = config.getTimeout();
 		this.verbose = config.isVerbose();
-		
-		this.producer = new Producer(config); 
+		this.encoding = config.getEncoding();
+		if(this.codec == null) {
+			this.codec = new JsonRpcCodec();
+		}
 	}
-	
-	public RpcInvoker(RpcInvoker other){
-		this.topic = other.topic;
+	 
+	public RpcInvoker(RpcInvoker other){ 
 		this.codec = other.codec;
 		this.module = other.module;
 		this.encoding = other.encoding;
 		this.timeout = other.timeout;
-		this.verbose = other.verbose;
-		this.producer = other.producer;
-	}
-	
-	private Message invokeSync(Message req, int timeout) throws IOException, InterruptedException {
-		req.setAck(false);
-		req.setTopic(this.topic);
-		return this.producer.publish(req, timeout);
-	}
- 
-	private void invokeAsync(Message req, ResultCallback<Message> callback) throws IOException {
-		req.setAck(false);
-		req.setTopic(this.topic);
-		
-		this.producer.publishAsync(req, callback);
+		this.verbose = other.verbose; 
+		this.messageInvoker = other.messageInvoker;
 	} 
+	
+	public RpcCodec getCodec() {
+		return codec;
+	}
 	
 	public <T> T invokeSync(Class<T> resultClass, String method, Object... args){
 		Request request = new Request()
@@ -113,8 +89,8 @@ public class RpcInvoker {
 	} 
 	
 	public <T> T invokeSync(Class<T> resultClass, Request request){
-		Response resp = invokeSync(request); 
-		return (T)JsonKit.convert(extractResult(resp), resultClass); 
+		Message msg = invokeSync0(request); 
+		return extractResult(msg, resultClass); 
 	}
 	
 	
@@ -128,13 +104,20 @@ public class RpcInvoker {
 			.method(method) 
 			.paramTypes(types)
 			.params(args); 
-		 
-		Response resp = invokeSync(req);
-		return extractResult(resp);
+		Message msg = invokeSync0(req);  
+		return extractResult(msg, Object.class);
 	} 
 	
-	public Response invokeSync(Request request){
-		Message msgReq= null, msgRes = null;
+	public Object invokeSync(Request request) {
+		Message msg = invokeSync0(request);  
+		return extractResult(msg, Object.class);
+	}
+	
+	public Message invokeSync0(Request request){
+		if(request.getModule() == null || "".equals(request.getModule())) {
+			request.setModule(this.module);
+		}
+		Message msgReq = null, msgRes = null;
 		try {
 			long start = System.currentTimeMillis();
 			msgReq = codec.encodeRequest(request, encoding); 
@@ -142,7 +125,7 @@ public class RpcInvoker {
 				log.info("[REQ]: %s", msgReq);
 			} 
 			
-			msgRes = invokeSync(msgReq, this.timeout); 
+			msgRes = messageInvoker.invokeSync(msgReq, this.timeout); 
 			
 			if(verbose){
 				long end = System.currentTimeMillis();
@@ -161,63 +144,105 @@ public class RpcInvoker {
 			throw new RpcException(errorMsg);
 		}
 		
-		return codec.decodeResponse(msgRes);
+		return msgRes;
 	}
 
 	
-	public <T> void invokeAsync(final Class<T> clazz, Request request,  final ResultCallback<T> callback){
-		invokeAsync(request, new ResultCallback<Response>() { 
-			@Override
-			public void onReturn(Response resp) {  
-				Object netObj = extractResult(resp);
-				try { 
-					T target = (T) JsonKit.convert(netObj, clazz);
-					callback.onReturn(target);
-				} catch (Exception e) { 
-					throw new RpcException(e.getMessage(), e.getCause());
-				}
-			}
-		});
-	}
-	
-	public void invokeAsync(Request request, final ResultCallback<Response> callback){ 
+	public <T> void invokeAsync(final Class<T> clazz, Request request, final RpcCallback<T> callback){
 		final long start = System.currentTimeMillis();
 		final Message msgReq = codec.encodeRequest(request, encoding); 
 		if(verbose){
 			log.info("[REQ]: %s", msgReq);
 		}  
 		try {
-			invokeAsync(msgReq, new ResultCallback<Message>() { 
+			messageInvoker.invokeAsync(msgReq, new ResultCallback<Message>() { 
 				@Override
 				public void onReturn(Message result) { 
 					if(verbose){
 						long end = System.currentTimeMillis();
 						log.info("[REP]: Time cost=%dms\n%s",(end-start), result); 
 					} 
-					Response resp = codec.decodeResponse(result);
-					if(callback != null){
-						callback.onReturn(resp);
+					try{
+						T res = extractResult(result, clazz);
+						if(callback != null){
+							callback.onSuccess(res);
+						}
+					} catch (Exception e) {
+						callback.onError(e);
 					}
 				}
 			});
+			
 		} catch (IOException e) {
 			throw new RpcException(e.getMessage(), e);
 		}  
 	}
-
+	 
+	 
+	@SuppressWarnings("unchecked")
+	private <T> T extractResult(Message message, Class<T> clazz){
+		if(Message.class.isAssignableFrom(clazz)) return (T)message; //special case
 	
-	private Object extractResult(Response resp){
-		Object error = resp.getError();
-		if(error != null){ 
-			if(error instanceof RuntimeException){
-				throw (RuntimeException)error;
+		Object result = codec.decodeResponse(message);  
+		if(message.getStatus() != RpcCodec.STATUS_OK){
+			if(result instanceof RuntimeException){
+				throw (RuntimeException)result;
+			} else {
+				throw new RpcException(result.toString());
 			}
-			throw new RpcException(error.toString()); 
-		} 
-		return resp.getResult();
-	} 
+		}
+		
+		try { 
+			return (T) JsonKit.convert(result, clazz); 
+		} catch (Exception e) { 
+			throw new RpcException(e.getMessage(), e.getCause());
+		}
+	}  
 	
-	
+	public String getModule() {
+		return module;
+	}
+
+	public void setModule(String module) {
+		this.module = module;
+	}
+
+	public String getEncoding() {
+		return encoding;
+	}
+
+	public void setEncoding(String encoding) {
+		this.encoding = encoding;
+	}
+
+	public int getTimeout() {
+		return timeout;
+	}
+
+	public void setTimeout(int timeout) {
+		this.timeout = timeout;
+	}
+
+	public boolean isVerbose() {
+		return verbose;
+	}
+
+	public void setVerbose(boolean verbose) {
+		this.verbose = verbose;
+	}
+
+	public MessageInvoker getMessageInvoker() {
+		return messageInvoker;
+	}
+
+	public void setMessageInvoker(MessageInvoker messageInvoker) {
+		this.messageInvoker = messageInvoker;
+	}
+
+	public void setCodec(RpcCodec codec) {
+		this.codec = codec;
+	}
+
 	@SuppressWarnings("unchecked")
 	public <T> T createProxy(Class<T> clazz){  
 		Constructor<RpcInvocationHandler> rpcInvokerCtor;
@@ -240,7 +265,10 @@ public class RpcInvoker {
 		try {
 			rpcInvokerCtor = RpcInvocationHandler.class.getConstructor(new Class[] {RpcInvoker.class });
 			RpcInvoker rpcInvoker = new RpcInvoker(config);
-			rpcInvoker.module = clazz.getName();
+			if(rpcInvoker.module == null || "".equals(rpcInvoker.module)) {
+				rpcInvoker.module = clazz.getName();
+			}   
+			
 			RpcInvocationHandler rpcInvokerHandler = rpcInvokerCtor.newInstance(rpcInvoker); 
 			Class<T>[] interfaces = new Class[] { clazz }; 
 			ClassLoader classLoader = Thread.currentThread().getContextClassLoader();

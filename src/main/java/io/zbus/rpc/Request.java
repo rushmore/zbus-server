@@ -53,15 +53,7 @@ public class Request{
 		}
 		return this;
 	} 
-	
-	public static void normalize(Request req){
-		if(req.module == null){
-			req.module = "";
-		}
-		if(req.params == null){
-			req.params = new Object[0];
-		}
-	}
+	 
 	@Override
 	public String toString() {
 		return "Request [module=" + module + ", method=" + method + ", params=" + Arrays.toString(params)

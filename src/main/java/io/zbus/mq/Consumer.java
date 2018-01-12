@@ -5,9 +5,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
@@ -19,16 +16,14 @@ public class Consumer extends MqAdmin implements Closeable {
 	private static final Logger log = LoggerFactory.getLogger(Consumer.class);  
 	private ServerSelector consumeServerSelector; 
 	
-	protected String topic; 
+	protected Topic topic;
 	protected ConsumeGroup consumeGroup; 
-	protected Integer consumeWindow; 
-	protected int consumeTimeout; 
+	protected ConsumeCtrl consumeCtrl = new ConsumeCtrl(); 
 	
 	private ExecutorService consumeRunner;  
 	private MessageHandler messageHandler;
-	private int connectionCount;
-	private int consumeRunnerPoolSize; 
-	private int maxInFlightMessage;   
+	private int connectionCount; 
+	private boolean declareOnMissing = true;
 	
 	private boolean started;
 	
@@ -36,24 +31,28 @@ public class Consumer extends MqAdmin implements Closeable {
 
 	public Consumer(ConsumerConfig config) {
 		super(config); 
-		
+		 
 		this.topic = config.getTopic(); 
 		this.consumeGroup = config.getConsumeGroup();
 		if(this.consumeGroup == null){
-			this.consumeGroup = new ConsumeGroup();
-			this.consumeGroup.setGroupName(this.topic);
+			this.consumeGroup = new ConsumeGroup(); 
+		} 
+		if(this.consumeGroup.getGroupName() == null) {
+			this.consumeGroup.setGroupName(this.topic.getName());
 		}
 		
-		if(this.consumeGroup.getMask() == null){ //TODO
-			this.consumeGroup.setMask(config.getTopicMask());
-		}
-		this.consumeWindow = config.getConsumeWindow();
-		this.consumeTimeout = config.getConsumeTimeout();
+		consumeCtrl.setTopic(topic.getName());
+		consumeCtrl.setConsumeGroup(consumeGroup.getGroupName());
+		consumeCtrl.setConsumeWindow(config.getConsumeWindow());
+		consumeCtrl.setConsumeTimeout(config.getConsumeTimeout()); 
 		
-		this.messageHandler = config.getMessageHandler();
-		this.consumeRunnerPoolSize = config.getConsumeRunnerPoolSize();
-		this.connectionCount = config.getConnectionCount();
-		this.maxInFlightMessage = config.getMaxInFlightMessage();
+		if(consumeGroup.isAckEnabled() && consumeGroup.getAckTimeout() == null){ 
+			consumeGroup.setAckTimeout(config.getConsumeTimeout());
+		}
+		
+		this.messageHandler = config.getMessageHandler(); 
+		this.connectionCount = config.getConnectionCount(); 
+		this.declareOnMissing = config.isDeclareOnMissing();
 		
 		this.consumeServerSelector = config.getConsumeServerSelector();
 		if(this.consumeServerSelector == null){
@@ -70,15 +69,10 @@ public class Consumer extends MqAdmin implements Closeable {
 		
 		if(this.messageHandler == null){
 			throw new IllegalArgumentException("ConsumeHandler and MessageProcessor are both null");
-		} 
-		
-		int n = consumeRunnerPoolSize;
-		consumeRunner = new ThreadPoolExecutor(n, n, 120, TimeUnit.SECONDS, 
-				new LinkedBlockingQueue<Runnable>(maxInFlightMessage),
-				new ThreadPoolExecutor.CallerRunsPolicy());  
+		}  
 		
 		Message msg = new Message();
-		msg.setTopic(topic);
+		msg.setTopic(topic.getName());
 		MqClientPool[] pools = broker.selectClient(consumeServerSelector, msg); 
 		
 		for(MqClientPool pool : pools){
@@ -119,13 +113,13 @@ public class Consumer extends MqAdmin implements Closeable {
 		}
 	}
 	 
-	private void startConsumeThreadGroup(MqClientPool pool, boolean pasuseOnStart){
+	private void startConsumeThreadGroup(MqClientPool pool, boolean pauseOnStart){
 		if(consumeThreadGroupMap.containsKey(pool.serverAddress())){
 			return;
 		}
 		ConsumeThreadGroup group = new ConsumeThreadGroup(pool);
 		consumeThreadGroupMap.put(pool.serverAddress(), group);
-		group.start(pasuseOnStart); 
+		group.start(pauseOnStart); 
 	}
 	
 	public void start(MessageHandler consumerHandler) throws IOException{
@@ -157,14 +151,11 @@ public class Consumer extends MqAdmin implements Closeable {
 		ConsumeThreadGroup(MqClientPool pool){ 
 			threads = new ConsumeThread[connectionCount];
 			for(int i=0;i<connectionCount;i++){
-				MqClient clieint = pool.createClient();
-				ConsumeThread thread = threads[i] = new ConsumeThread(clieint); 
-				thread.setTopic(topic); 
-				thread.setConsumeGroup(consumeGroup); 
-				thread.setToken(token); 
-				thread.setConsumeRunner(consumeRunner); 
-				thread.setConsumeTimeout(consumeTimeout);
-				
+				MqClient client = pool.createClient();
+				ConsumeCtrl ctrl = consumeCtrl.clone();
+				ConsumeThread thread = threads[i] = new ConsumeThread(client, topic, consumeGroup, ctrl);  
+				thread.setToken(token);  
+				thread.setDeclareOnMissing(declareOnMissing);
 				thread.setMessageHandler(messageHandler); 
 			}
 		} 

@@ -26,7 +26,7 @@ class ProxyClient implements IoAdaptor, Closeable {
 	int connectTimeout;
 	int readTimeout; 
 	 
-	ProxyClient(Session upstream, final TcpProxy proxy) { 
+	ProxyClient(Session upstream, final Proxy proxy) { 
 		this.upstream = upstream;
 		this.bootstrap = new Bootstrap(); 
 		

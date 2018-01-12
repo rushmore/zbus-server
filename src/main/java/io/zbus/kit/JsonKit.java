@@ -56,7 +56,7 @@ public class JsonKit {
 		}
 	}
 	
-	public static String toJSONStringWithTykpe(Object value, String encoding) {
+	public static String toJSONStringWithType(Object value, String encoding) {
 		byte[] data = toJSONBytesWithType(value, encoding);
 		try {
 			return new String(data, encoding);

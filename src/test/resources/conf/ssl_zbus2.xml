@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<zbus compatible="false">   <!-- Enable compatible to zbus7 -->  
+<zbus> 
 
 	<serverHost>0.0.0.0</serverHost>  
 	<serverPort>15556</serverPort>  
@@ -25,7 +25,7 @@
 	</trackerList>  
 	 
 	
-	<auth enabled="true" class="">
+	<auth enabled="false" class="">
 		<token value="" operation="js, css, img, ssl, tracker, track_sub, track_pub">  
 			<topic value="*"/>
 		</token>

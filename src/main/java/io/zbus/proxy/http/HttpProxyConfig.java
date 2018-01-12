@@ -19,10 +19,10 @@ import io.zbus.kit.ClassKit;
 import io.zbus.kit.ConfigKit.XmlConfig;
 import io.zbus.mq.Broker;
 
-public class ProxyConfig extends XmlConfig { 
+public class HttpProxyConfig extends XmlConfig { 
 	private Broker broker; 
 	private String brokerAddress;
-	private int connectionCount = 4; //Number of connections to zbus broker per consumer 
+	private int consumerCount = 4; //Number of connections to zbus broker per consumer 
 	private int consumeTimeout = 10000;
 	private String token;
 	private Map<String, ProxyEntry> entryTable = new HashMap<String, ProxyEntry>(); 
@@ -33,25 +33,15 @@ public class ProxyConfig extends XmlConfig {
 		public MessageFilter sendFilter;
 		public MessageFilter recvFilter;
 		public List<String> targetList = new ArrayList<String>();
+		public int heartbeatInterval;
+		public int targetClientCount;
+		public boolean targetMessageIdentifiable = false;
 	} 
 	
-	public static class ProxyHandlerConfig{
-		public String topic;
-		public String targetUrl;
-		
-		public String token;
-		public Broker broker; 
-		public int connectionCount;
-		public int consumeTimeout;
-		
-		public MessageFilter sendFilter;
-		public MessageFilter recvFilter;
-	}
-
 	public void loadFromXml(Document doc) throws Exception{
 		XPath xpath = XPathFactory.newInstance().newXPath();  
 		this.brokerAddress = valueOf(xpath.evaluate("/zbus/httpProxy/@zbus", doc), "localhost:15555");  
-		this.connectionCount = valueOf(xpath.evaluate("/zbus/httpProxy/@connectionCount", doc), 4);   
+		this.consumerCount = valueOf(xpath.evaluate("/zbus/httpProxy/@consumerCount", doc), 4);   
 		this.consumeTimeout = valueOf(xpath.evaluate("/zbus/httpProxy/@consumeTimeout", doc), 10000);   
 		this.token = valueOf(xpath.evaluate("/zbus/httpProxy/@token", doc), null);   
 		 
@@ -72,7 +62,9 @@ public class ProxyConfig extends XmlConfig {
 			    if(!recvFilterClass.equals("")){ 
 			    	entry.recvFilter = ClassKit.newInstance(recvFilterClass);
 			    }
-			    
+			    entry.targetClientCount = valueOf(xpath.evaluate("@clientCount", node), 4);
+			    entry.heartbeatInterval = valueOf(xpath.evaluate("@heartbeat", node), 1)*1000;  //default to 1 seconds
+			    entry.targetMessageIdentifiable = valueOf(xpath.evaluate("@messageIdentifiable", node), false);
 			    entry.topic = entryName;
 			    
 			    NodeList targetList = (NodeList) xpath.compile("./*").evaluate(node, XPathConstants.NODESET);
@@ -90,20 +82,12 @@ public class ProxyConfig extends XmlConfig {
 
 	public Broker getBroker() {
 		return broker;
-	}
-
-	public int getConnectionCount() {
-		return connectionCount;
 	} 
  
 	public void setBroker(Broker broker) {
 		this.broker = broker;
 	}
-
-	public void setConnectionCount(int connectionCount) {
-		this.connectionCount = connectionCount;
-	} 
-	
+ 
 	public String getBrokerAddress() {
 		return brokerAddress;
 	}
@@ -134,5 +118,13 @@ public class ProxyConfig extends XmlConfig {
 	
 	public void setToken(String token) {
 		this.token = token;
+	}
+ 
+	public int getConsumerCount() {
+		return consumerCount;
+	} 
+	public void setConsumerCount(int consumerCount) {
+		this.consumerCount = consumerCount;
 	}  
+	
 }

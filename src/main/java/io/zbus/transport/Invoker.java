@@ -23,7 +23,7 @@ public interface Invoker<REQ extends Id, RES extends Id> {
 	 * @throws IOException if network failure happens
 	 * @throws InterruptedException if invocation is interrupted
 	 */
-	RES invokeSync(REQ req, int timeout) throws IOException, InterruptedException;
+	RES invokeSync(REQ req, long timeout) throws IOException, InterruptedException;
 	
 	/**
 	 * invoke synchronously 

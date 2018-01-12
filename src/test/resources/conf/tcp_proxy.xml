@@ -2,10 +2,18 @@
 <zbus> <!-- zbus prefix, made easy to use one configuration file -->
 
 	<tcpProxy>  
-		<server>0.0.0.0:80</server>
-		<target>localhost:15555</target>
-		<connectTimeout>3000</connectTimeout>
-		<idleTimeout>60000</idleTimeout> 
+		<proxy>
+			<server>0.0.0.0:80</server>
+			<target>localhost:3306</target>
+			<connectTimeout>3000</connectTimeout>
+			<idleTimeout>60000</idleTimeout> 
+		</proxy>  
+		<proxy>
+			<server>0.0.0.0:8080</server>
+			<target>localhost:3306</target>
+			<connectTimeout>3000</connectTimeout>
+			<idleTimeout>60000</idleTimeout> 
+		</proxy>  
 	</tcpProxy>
 	
 </zbus>

@@ -12,6 +12,7 @@ public class Index extends MappedFile {
 	public static final int IndexVersion  = 0x01;
 	public static final String IndexSuffix = ".idx";
 	public static final String ReaderSuffix = ".rdx";
+	public static final String NakSuffix = ".nak";
 	public static final String BlockSuffix = ".zbus";
 	public static final String BlockDir = "data";
 	public static final String ReaderDir = "reader"; 
@@ -69,7 +70,7 @@ public class Index extends MappedFile {
 		} finally {
 			lock.unlock();
 		} 
-		Block block = new Block(this, blockFile(offset.baseOffset), currentBlockNumber());
+		Block block = new Block(this, blockFile(offset.baseOffset), currentBlockNumber(), offset.baseOffset);
 		return block;
 	}
 
@@ -80,7 +81,7 @@ public class Index extends MappedFile {
 		checkBlockNumber(blockNumber);
 
 		Offset offset = readOffset(blockNumber);
-		Block block = new Block(this, blockFile(offset.baseOffset), blockNumber);
+		Block block = new Block(this, blockFile(offset.baseOffset), blockNumber, offset.baseOffset);
 		return block;
 	}
 
@@ -112,15 +113,26 @@ public class Index extends MappedFile {
 		}
 	}
  
-	public int searchBlockNumber(long totalOffset) throws IOException {
+	public BlockOffset searchBlock(long totalOffset) throws IOException {
 		for (int i = 0; i < blockCount; i++) {
 			long blockNumber = blockStart + i;
 			Offset offset = readOffset(blockNumber);
 			if (totalOffset >= offset.baseOffset && totalOffset < offset.baseOffset + offset.endOffset) {
-				return i;
+				return new BlockOffset(offset, blockNumber); 
 			}
 		}
-		return -1;
+		return null;
+	}
+	
+	public BlockOffset searchBlockByTime(long timestamp) throws IOException {
+		for (int i = 0; i < blockCount; i++) {
+			long blockNumber = blockStart + i;
+			Offset offset = readOffset(blockNumber);
+			if(offset.updatedTime<timestamp) continue;
+			
+			return new BlockOffset(offset, blockNumber); 
+		}
+		return null;
 	}
 	
 	public long increaseMessageCount(){
@@ -319,5 +331,15 @@ public class Index extends MappedFile {
 		public long createdTime;
 		public int endOffset;
 		public long updatedTime; 
+	}
+	
+	public static class BlockOffset {
+		public Offset offset;
+		public long blockNumber;
+		
+		public BlockOffset(Offset offset, long blockNumber) {
+			this.offset = offset;
+			this.blockNumber = blockNumber;
+		}
 	}
 }

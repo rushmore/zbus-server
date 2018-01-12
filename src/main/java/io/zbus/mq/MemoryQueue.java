@@ -31,7 +31,7 @@ public class MemoryQueue extends AbstractQueue {
 			queue.poll();
 			log.warn("Memory queue full, message discarded");
 		}
-		
+		message.setTimestamp(System.currentTimeMillis()); //record timestamp
 		this.lastUpdatedTime = System.currentTimeMillis(); 
 		dispatch();
 	}
@@ -115,6 +115,11 @@ public class MemoryQueue extends AbstractQueue {
 		public Message read() throws IOException { 
 			return queue.poll();
 		} 
+		
+		@Override
+		public Message read(long offset) { 
+			return null;
+		}
 		
 		public boolean isEnd(){
 			return queue.size() == 0;

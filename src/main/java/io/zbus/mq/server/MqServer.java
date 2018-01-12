@@ -25,11 +25,14 @@ import io.zbus.kit.StrKit;
 import io.zbus.kit.logging.Logger;
 import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.Broker;
+import io.zbus.mq.Message;
 import io.zbus.mq.MessageQueue;
 import io.zbus.mq.Protocol.ServerInfo;
 import io.zbus.mq.Protocol.TopicInfo;
 import io.zbus.proxy.http.HttpProxy;
-import io.zbus.proxy.http.ProxyConfig;
+import io.zbus.proxy.http.HttpProxyConfig;
+import io.zbus.proxy.tcp.TcpProxy;
+import io.zbus.proxy.tcp.TcpProxyConfig;
 import io.zbus.transport.CodecInitializer;
 import io.zbus.transport.IoAdaptor;
 import io.zbus.transport.ServerAddress;
@@ -52,6 +55,10 @@ public class MqServer extends TcpServer {
 	private MqAdaptor mqAdaptor;  
 	private Tracker tracker; 
 	private HttpProxy httpProxy;
+	private TcpProxy tcpProxy;
+	
+	private TcpServer monitorServer;
+	private MonitorAdaptor monitorAdaptor = null;
 	
 	private AtomicLong infoVersion = new AtomicLong(System.currentTimeMillis());
 	
@@ -64,9 +71,7 @@ public class MqServer extends TcpServer {
 	}
 	
 	public MqServer(MqServerConfig serverConfig){   
-		config = serverConfig.clone(); 
-		
-		Fix.Enabled = config.isCompatible();
+		config = serverConfig.clone();  
 		
 		codec(new CodecInitializer() {
 			@Override
@@ -82,7 +87,7 @@ public class MqServer extends TcpServer {
 		String certFileContent = "";
 		if (sslEnabled){  
 			try{ 
-				certFileContent = FileKit.renderFile(config.getSslCertFile());
+				certFileContent = FileKit.loadFile(config.getSslCertFile());
 				SslContext sslContext = SslKit.buildServerSsl(config.getSslCertFile(), config.getSslKeyFile());
 				loop.setSslContext(sslContext); 
 			} catch (Exception e) { 
@@ -121,11 +126,46 @@ public class MqServer extends TcpServer {
 			}
 		}, 1000, config.getCleanMqInterval(), TimeUnit.MILLISECONDS);   
 		
-		tracker = new Tracker(this);
+		tracker = new Tracker(this); 
 		
+		if(config.isMonitorEnabled()){
+			Integer monitorPort = config.getMonitorPort();
+			this.monitorAdaptor = new MonitorAdaptor(this);
+			if(config.getMonitorPort() != null && monitorPort != config.getServerPort()){
+				this.monitorServer = new TcpServer(loop); 
+				this.monitorServer.codec(new CodecInitializer() {
+					@Override
+					public void initPipeline(List<ChannelHandler> p) {
+						p.add(new HttpServerCodec());
+						p.add(new HttpObjectAggregator(loop.getPackageSizeLimit()));
+						p.add(new io.zbus.transport.http.MessageCodec());
+						p.add(new io.zbus.mq.MessageCodec());
+					}
+				}); 
+				this.monitorServer.start(monitorPort, this.monitorAdaptor);
+			}  
+		}    
 		//adaptor needs tracker built first
-		mqAdaptor = new MqAdaptor(this); 
-		mqAdaptor.setVerbose(config.isVerbose()); 
+		if(this.monitorServer != null){
+			mqAdaptor = new MqAdaptor(this, null); 
+		} else {
+			mqAdaptor = new MqAdaptor(this, monitorAdaptor); 
+		}
+		
+		final boolean verbose = config.isVerbose();
+		if(config.getMessageLogger() == null){
+			mqAdaptor.setMessageLogger(new MessageLogger() { 
+				@Override
+				public void log(Message message, Session session) {
+					if(verbose){
+						log.info("\n%s", message);
+					} 
+				}
+			});
+		} else {
+			mqAdaptor.setMessageLogger(config.getMessageLogger());
+		}
+		
 		try {
 			mqAdaptor.loadDiskQueue();
 		} catch (IOException e) {
@@ -133,9 +173,10 @@ public class MqServer extends TcpServer {
 		}   
 		
 		loadHttpProxy(config.getHttpProxyConfig());
+		loadTcpProxy(config.getTcpProxyConfig());
 	} 
 	
-	private void loadHttpProxy(ProxyConfig config){ 
+	private void loadHttpProxy(HttpProxyConfig config){ 
 		if(config == null || config.getEntryTable().isEmpty()) return; 
 		
 		try {
@@ -144,6 +185,17 @@ public class MqServer extends TcpServer {
 			httpProxy = new HttpProxy(config);
 			httpProxy.start();
 		} catch (IOException e) {
+			log.error(e.getMessage(), e.getCause());
+		}
+	}
+	
+	private void loadTcpProxy(TcpProxyConfig config){ 
+		if(config == null) return; 
+		
+		try {
+			tcpProxy = new TcpProxy(config);
+			tcpProxy.start();
+		} catch (Exception e) {
 			log.error(e.getMessage(), e.getCause());
 		}
 	}
@@ -168,11 +220,19 @@ public class MqServer extends TcpServer {
 	public void close() throws IOException {   
 		scheduledExecutor.shutdown();   
 		mqAdaptor.close();  
+		if(monitorServer != null){
+			monitorServer.close();
+		}
+		if(monitorAdaptor != null){
+			monitorAdaptor.close();
+		}
 		tracker.close();
 		if(httpProxy != null){
 			httpProxy.close();
 		}
-		
+		if(tcpProxy != null) {
+			tcpProxy.close();
+		}
 		super.close();
 	}  
     

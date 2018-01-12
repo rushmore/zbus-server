@@ -4,10 +4,16 @@
 	
 	<!-- Can be multiple zbus servers, for HA -->
 	<!-- Token settings is for zbus authentication -->
-	<httpProxy zbus="localhost:15555" connectionCount="1" consumeTimeout="10000" token="admin">
-		<proxy entry="http" token="admin" sendFilter="io.zbus.examples.proxy.MyMessageFilter" recvFilter=""> <!-- class name of filter -->
-			<target>http://localhost:15555/?cmd=server</target> <!-- Can be multiple -->
-			<target>http://localhost:15556/?cmd=server</target>
+	<httpProxy zbus="localhost:15555" consumerCount="4" clientCount="4" token="admin">
+		<proxy entry="examples" 
+			token="admin" 
+			sendFilter=""  
+			recvFilter="" 
+			messageIdentifiable="false"
+			>  
+			<!-- -->
+			<target>http://localhost:80/</target> 
+			 
 		</proxy>
 		<!-- you may add multiple proxies -->
 	</httpProxy> 

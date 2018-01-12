@@ -13,8 +13,10 @@ import io.zbus.kit.logging.LoggerFactory;
 import io.zbus.mq.Protocol.ConsumeGroupInfo;
 import io.zbus.mq.disk.DiskMessage;
 import io.zbus.mq.disk.Index;
+import io.zbus.mq.disk.QueueNak;
 import io.zbus.mq.disk.QueueReader;
 import io.zbus.mq.disk.QueueWriter;
+import io.zbus.mq.disk.QueueNak.TimeoutMessage;
 import io.zbus.transport.Session;
 
 
@@ -42,17 +44,19 @@ public class DiskQueue extends AbstractQueue{
             	String groupName = readerFile.getName();
             	groupName = groupName.substring(0, groupName.lastIndexOf('.'));
             	
-            	DiskConsumeGroup group = new DiskConsumeGroup(this.index, groupName);
+            	DiskConsumeGroup group = new DiskConsumeGroup(groupName);
             	consumeGroups.put(groupName, group);
             }
         } 
 	}
+	 
 	  
 	public ConsumeGroupInfo declareGroup(ConsumeGroup ctrl) throws Exception{
 		String consumeGroup = ctrl.getGroupName();
-		if(consumeGroup == null){
-			consumeGroup = this.topic;
+		if(consumeGroup == null || (ctrl.getGroupNameAuto() != null && ctrl.getGroupNameAuto()==true)){ 
+			consumeGroup = nextGroupName();
 		}
+		Integer mask = ctrl.getMask();
 		DiskConsumeGroup group = (DiskConsumeGroup)consumeGroups.get(consumeGroup); 
 		if(group == null){
 			QueueReader copyReader = null;
@@ -69,33 +73,38 @@ public class DiskQueue extends AbstractQueue{
 			}  
 			
 			if(copyReader != null){ 
-				group = new DiskConsumeGroup(copyReader, consumeGroup);  
+				group = new DiskConsumeGroup(consumeGroup, copyReader);  
 			} else {  
 				//3) consume from the very beginning
-				group = new DiskConsumeGroup(this.index, consumeGroup);  
-			}   
-			String creator = ctrl.getCreator();
-			if(creator != null){
-				group.reader.setCreator(ctrl.getCreator());
-			}
+				group = new DiskConsumeGroup(consumeGroup);  
+			}    
 			consumeGroups.put(consumeGroup, group); 
 			log.info("ConsumeGroup created: %s", group); 
 		} 
-		group.reader.setFilter(ctrl.getFilter());
-		Integer mask = ctrl.getMask();
+		group.setFilter(ctrl.getFilter()); 
+		
 		if(mask != null){
-			group.reader.setMask(mask);
+			group.setMask(mask);
+		}
+		Integer ackWindow = ctrl.getAckWindow();
+		Long ackTimeout = ctrl.getAckTimeout();
+		
+		if(ackWindow != null) {
+			group.setAckWindow(ackWindow);
+		}
+		if(ackTimeout != null) { 
+			group.setAckTimeout(ackTimeout);
 		}
 		
 		if(ctrl.getStartOffset() != null){
-			boolean seekOk = group.reader.seek(ctrl.getStartOffset(), ctrl.getStartMsgId());
+			boolean seekOk = group.seek(ctrl.getStartOffset(), ctrl.getStartMsgId());
 			if(!seekOk){
 				String errorMsg = String.format("seek by offset unsuccessfull: (offset=%d, msgid=%s)", ctrl.getStartOffset(), ctrl.getStartMsgId());
 				throw new IllegalArgumentException(errorMsg);
 			}
 		} else { 
 			if(ctrl.getStartTime() != null){
-				boolean seekOk = group.reader.seek(ctrl.getStartTime());
+				boolean seekOk = group.seek(ctrl.getStartTime());
 				if(!seekOk){
 					String errorMsg = String.format("seek by time unsuccessfull: (time=%d)", ctrl.getStartTime());
 					throw new IllegalArgumentException(errorMsg);
@@ -183,17 +192,57 @@ public class DiskQueue extends AbstractQueue{
 	} 
 	 
 	
-	private class DiskConsumeGroup extends AbstractConsumeGroup{ 
-		public final QueueReader reader; 
+	private class DiskConsumeGroup extends AbstractConsumeGroup { 
+		private final QueueReader reader; 
+		private QueueNak queueNak = null;
 		
-		public DiskConsumeGroup(Index index, String groupName) throws IOException{ 
+		public DiskConsumeGroup(String groupName) throws IOException{ 
 			super(groupName);
 			reader = new QueueReader(index, this.groupName);
+			
+			initNakQueue();
 		}
 		
-		public DiskConsumeGroup(QueueReader reader, String groupName) throws IOException{ 
+		public DiskConsumeGroup(String groupName, QueueReader reader) throws IOException{ 
 			super(groupName);
 			this.reader = new QueueReader(reader, groupName);
+			
+			initNakQueue();
+		}
+		
+		@Override
+		public boolean isNakFull() { 
+			if(queueNak == null) return false;
+			return queueNak.remaining() <= 0;
+		}
+		
+		private void initNakQueue() throws IOException {
+			if(queueNak != null) return;
+			Integer mask = reader.getMask();
+			if(mask == null || mask == 0) {
+				mask = index.getMask(); //use index if missing
+			}
+			
+			if(mask != null && (mask&Protocol.MASK_ACK_REQUIRED) != 0) {  
+				queueNak = new QueueNak(reader);
+			}
+		}
+		
+		@Override
+		public void ack(long offset) throws IOException {
+			if(queueNak == null) return;
+			
+			queueNak.removeNak(offset);
+		}
+		
+		public void setAckWindow(Integer window) {
+			if(queueNak == null) return;
+			queueNak.setWindow(window);
+		}
+		
+		public void setAckTimeout(Long timeout) {
+			if(queueNak == null) return;
+			queueNak.setTimeout(timeout);
 		}
 		
 		@Override
@@ -206,28 +255,94 @@ public class DiskQueue extends AbstractQueue{
 		}
 		
 		@Override
+		public Message readTimeoutMessage() throws IOException {
+			TimeoutMessage data = null; 
+			if(queueNak != null) {  
+				data = queueNak.pollTimeoutMessage();
+			}
+			if(data == null) return null;
+			Message message = convert(data.diskMessage);
+			message.setRetry(data.nakRecord.retryCount);
+			return message;
+		}
+		
+		@Override
 		public Message read() throws IOException { 
-			DiskMessage data = reader.read();
+			DiskMessage data = reader.read(); 
+			
 			if(data == null){
 				return null;
 			}
 			
+			return convert(data);
+		} 
+		
+		@Override
+		public Message read(long offset) throws IOException {
+			DiskMessage data = reader.read(offset);
+			if(data == null) {
+				return null;
+			}
+			return convert(data);
+		}
+		
+		private Message convert(DiskMessage data) {
 			Message msg = Message.parse(data.body);
 			if(msg == null){ 
 				log.warn("data read from queue can not be serialized back to Message type");
 			} else {
-				msg.setOffset(data.offset);   
+				msg.setOffset(data.offset);  
+				msg.setTimestamp(data.timestamp);
 			}
 			return msg;
 		}
 		
+		public boolean seek(long totalOffset, String msgid) throws IOException{ 
+			return reader.seek(totalOffset, msgid);
+		}
+		
+		public boolean seek(long time) throws IOException { 
+			return reader.seek(time);
+		}
+		
+		public void setFilter(String filter) {
+			reader.setFilter(filter);
+		} 
+		
 		@Override
 		public void close() throws IOException {
 			reader.close(); 
+			if(queueNak != null) {
+				queueNak.close();
+			}
 		} 
 		
 		public void delete() throws IOException{
+			if(queueNak != null) { 
+				queueNak.delete();
+			}
 			reader.delete();
+		}
+		
+		public Integer getMask(){
+			Integer mask = reader.getMask();
+			if(mask == null || mask == 0) {
+				mask = index.getMask(); //use Topic mask instead if not set
+			}
+			return mask;
+		}
+		
+		public void setMask(Integer mask) throws IOException {
+			reader.setMask(mask);
+			
+			initNakQueue();
+		}
+		
+		@Override
+		public void recordNak(Long offset, Integer retryCount) {
+			 if(queueNak != null && offset != null) {
+				 queueNak.addNak(offset, retryCount);
+			 } 
 		}
 		
 		public ConsumeGroupInfo getConsumeGroupInfo(){

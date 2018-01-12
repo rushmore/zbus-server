@@ -13,6 +13,7 @@ public abstract class AbstractClient<REQ extends Id, RES extends Id> extends Att
 	private static final Logger log = LoggerFactory.getLogger(AbstractClient.class); 
 	 
 	protected Session session;  
+	protected String clientId;
 	protected int invokeTimeout = 3000;
 	protected int connectTimeout = 3000;  
 	
@@ -30,7 +31,7 @@ public abstract class AbstractClient<REQ extends Id, RES extends Id> extends Att
 		onConnected(new ConnectedHandler() { 
 			@Override
 			public void onConnected() throws IOException {
-				String msg = String.format("Connection(%s) OK", serverAddress());
+				String msg = String.format("Connection(%s) OK, ID=%s", serverAddress(), clientId);
 				log.info(msg);
 			}
 		});
@@ -38,7 +39,7 @@ public abstract class AbstractClient<REQ extends Id, RES extends Id> extends Att
 		onDisconnected(new DisconnectedHandler() { 
 			@Override
 			public void onDisconnected() throws IOException {
-				log.warn("Disconnected from(%s)", serverAddress());
+				log.warn("Disconnected from(%s) ID=%s", serverAddress(), clientId);
 				ensureConnectedAsync();//automatically reconnect by default
 			}
 		}); 
@@ -144,6 +145,7 @@ public abstract class AbstractClient<REQ extends Id, RES extends Id> extends Att
 	@Override
 	public void sessionCreated(Session session) throws IOException { 
 		this.session = session;
+		this.clientId = this.session.id();
 		activeLatch.countDown();
 		if(connectedHandler != null){
 			connectedHandler.onConnected();
@@ -201,7 +203,7 @@ public abstract class AbstractClient<REQ extends Id, RES extends Id> extends Att
 		return this.invokeSync(req, this.invokeTimeout);
 	}
 	 
-	public RES invokeSync(REQ req, int timeout) throws IOException, InterruptedException {
+	public RES invokeSync(REQ req, long timeout) throws IOException, InterruptedException {
 		Ticket<REQ, RES> ticket = null;
 		try { 
 			ticket = sync.createTicket(req, timeout);

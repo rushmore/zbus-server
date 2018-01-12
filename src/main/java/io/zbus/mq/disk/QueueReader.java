@@ -6,11 +6,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.zbus.kit.StrKit;
+import io.zbus.kit.logging.Logger;
+import io.zbus.kit.logging.LoggerFactory;
+import io.zbus.mq.disk.Index.BlockOffset;
+import io.zbus.mq.disk.Index.Offset;
  
 
 public class QueueReader extends MappedFile implements Comparable<QueueReader> {
+	private static final Logger log = LoggerFactory.getLogger(QueueReader.class); 
+	
 	private static final int READER_FILE_SIZE = 1024;  
-	private static final int FITER_POS = 12;  
+	private static final int FILTER_POS = 12;  
+	private static final int FILTER_MAX_LENGTH = 127;  
 	private Block block;  
 	private final Index index;  
 	private final String readerGroup; 
@@ -21,7 +28,8 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 	
 	private List<String[]> filterParts = new ArrayList<String[]>();
 	private long messageNumber = -1; //the last messageNumber read, the next message number to read is messageNumber+1
-	  
+	
+	private Block randomAccessBlock;
 	
 	public QueueReader(Index index, String readerGroup) throws IOException{
 		this.index = index; 
@@ -67,16 +75,91 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 		block = this.index.createReadBlock(this.blockNumber);
 	}  
 	
+	public Index getIndex() {
+		return this.index;
+	}
+	
+	public String getGroupName() {
+		return this.readerGroup;
+	}
+	
+	public File getReaderDir() {
+		return new File(index.getIndexDir(), Index.ReaderDir);
+	}
+	
 	private File readerFile(String readerGroup){
 		File readerDir = new File(index.getIndexDir(), Index.ReaderDir);
 		return new File(readerDir, this.readerGroup + Index.ReaderSuffix); 
 	}
 	
-	public boolean seek(long offset, String msgid) throws IOException{ 
+	public boolean seek(long totalOffset, String msgid) throws IOException{ 
+		BlockOffset res = index.searchBlock(totalOffset);
+		if(res == null) {
+			return false;
+		}
+		long blockNo = res.blockNumber;
+		Offset offset = res.offset;
+		
+		int offsetInside = (int)(totalOffset - offset.baseOffset);
+		Block b = null;
+		if(blockNo == this.blockNumber) {
+			b = this.block; 
+		} else {
+			b = index.createReadBlock(blockNo);
+		}
+		DiskMessage msg = b.readHead(offsetInside);
+		if(!msgid.equals(msg.id)) {
+			if(b != this.block) {
+				b.close();
+			}
+			return false;
+		}
+		
+		this.blockNumber = blockNo;
+		this.offset = offsetInside;
+		if(b != this.block) {
+			this.block.close();
+		}
+		this.block = b; 
+		this.messageNumber = msg.messageNumber;
+		
 		return true;
 	}   
 	
 	public boolean seek(long time) throws IOException{ 
+		BlockOffset res = index.searchBlock(offset);
+		if(res == null) {
+			return false;
+		}
+		long blockNo = res.blockNumber;
+		Offset offset = res.offset;
+		 
+		Block b = null;
+		if(blockNo == this.blockNumber) {
+			b = this.block; 
+		} else {
+			b = index.createReadBlock(blockNo);
+		}
+		
+		int pos = 0;
+		
+		DiskMessage msg = null;
+		while(pos < offset.endOffset) {
+			msg = block.readFully(pos);
+			pos += msg.bytesScanned;
+			if(msg.timestamp<time) continue; 
+		}
+		if(b != this.block) {
+			this.block.close();
+		}
+		
+		if(msg == null) return false;
+		
+		this.blockNumber = blockNo;
+		this.offset = pos; 
+		this.block = b; 
+		this.messageNumber = msg.messageNumber;
+		
 		return true;
 	}   
 	
@@ -138,6 +221,27 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 		} finally {
 			lock.unlock();
 		} 
+	}
+	
+	public DiskMessage read(long offset) throws IOException{ 
+		
+		lock.lock();
+		try{  
+			BlockOffset blockOffset = index.searchBlock(offset);
+			if(blockOffset == null) return null;
+			
+			if(randomAccessBlock != null && randomAccessBlock.getBlockNumber() != blockOffset.blockNumber) {
+				randomAccessBlock.close();
+				randomAccessBlock = null;
+			}
+			if(this.randomAccessBlock == null) {
+				this.randomAccessBlock = index.createReadBlock(blockOffset.blockNumber);
+			}
+			int offsetInside = (int)(offset - blockOffset.offset.baseOffset);
+			return randomAccessBlock.readFully(offsetInside);  
+		} finally {
+			lock.unlock();
+		} 
 	} 
 	
 	
@@ -153,7 +257,7 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 		if(tagLen > 0){
 			this.filter = new String(tag, 1, tagLen);
 			calcFilter(this.filter); 
-		} 
+		}
 	}
 	
 	@Override
@@ -164,8 +268,8 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 		writeOffset();
 		
 		//write tag
-		buffer.position(FITER_POS);
-		buffer.put((byte)0); //tag default to null 
+		buffer.position(FILTER_POS);
+		buffer.put((byte)0); //tag default to null
 	}   
 	 
 	public int getOffset() {
@@ -177,17 +281,20 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 	} 
 
 	public void setFilter(String filter) {
+		if(filter != null && filter.length() > FILTER_MAX_LENGTH){
+			log.warn("filter:[" + filter + "] exceed max length 127");
+			return;
+		} 
 		lock.lock();
 		try{  
 			this.filter = filter;
 			int len = 0;
 			if(StrKit.isEmpty(filter)){ //clear
-				buffer.position(FITER_POS);
-				buffer.put((byte)0);  
-				
+				buffer.position(FILTER_POS);
+				buffer.put((byte)0);   
 			} else {
 				len = filter.length();
-				buffer.position(FITER_POS);
+				buffer.position(FILTER_POS);
 				buffer.put((byte)len); 
 				buffer.put(this.filter.getBytes());
 				
@@ -235,6 +342,9 @@ public class QueueReader extends MappedFile implements Comparable<QueueReader> {
 		super.close();
 		if(block != null){
 			block.close();
+		}
+		if(randomAccessBlock != null) {
+			randomAccessBlock.close();
 		}
 	}
 	

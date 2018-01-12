@@ -10,7 +10,7 @@ import io.zbus.mq.disk.QueueWriter;
 public class QueueWriterTest {
 	
 	public static void main(String[] args) throws Exception { 
-		Index index = new Index(new File("C:/tmp/MyMQ")); 
+		Index index = new Index(new File("/tmp/MyTopic")); 
 		QueueWriter w = new QueueWriter(index);
 		
 		for(int i=0; i<1000000;i++){
@@ -19,7 +19,7 @@ public class QueueWriterTest {
 			w.write(message);
 		}
 		
-		QueueReader r = new QueueReader(index, "MyMQ");
+		QueueReader r = new QueueReader(index, "MyTopic");
 		while(true){
 			DiskMessage data = r.read();
 			if(data == null) break;

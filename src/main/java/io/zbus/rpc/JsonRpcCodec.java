@@ -23,84 +23,114 @@
 package io.zbus.rpc;
  
 
-import java.util.Map;
-
+import io.zbus.kit.HttpKit;
 import io.zbus.kit.JsonKit;
-import io.zbus.mq.Message;
-import io.zbus.mq.server.Fix;
+import io.zbus.kit.HttpKit.UrlInfo;
+import io.zbus.transport.http.Message; 
  
 
 public class JsonRpcCodec implements RpcCodec {  
 	private static final String DEFAULT_ENCODING = "UTF-8"; 
+	private boolean requestTypeInfo = true;   
+	private boolean responseTypeInfo = false; //Browser friendly 
+
+	public void setRequestTypeInfo(boolean requestTypeInfo) {
+		this.requestTypeInfo = requestTypeInfo;
+	} 
 	
+	public void setResponseTypeInfo(boolean responseTypeInfo) {
+		this.responseTypeInfo = responseTypeInfo;
+	} 
+
 	public Message encodeRequest(Request request, String encoding) {
 		Message msg = new Message();  
 		if(encoding == null) encoding = DEFAULT_ENCODING;  
 		msg.setEncoding(encoding);
-		if(Fix.Enabled){ //zbus7 package name conflicts if type enabled
-			msg.setBody(JsonKit.toJSONBytes(request, encoding));
+		if(requestTypeInfo) {
+			msg.setBody(JsonKit.toJSONBytesWithType(request, encoding)); 
 		} else {
-			msg.setBody(JsonKit.toJSONBytesWithType(request, encoding));
-		} 
+			msg.setBody(JsonKit.toJSONBytes(request, encoding));
+		}
+		String contentType = "application/json";
+		msg.setHeader("content-type", contentType);
 		return msg;
 	}
-	
+	private Request decodeUpload(Message msg) {
+		UrlInfo info = HttpKit.parseUrl(msg.getUrl());  
+		if(info.path.size() < 1){
+			return null;
+		}
+		
+		int moduleStart = 0;
+		if(msg.getHeader("topic") != null) moduleStart = 1; //MQ based, topic prefix added
+		
+		Request req = new Request();
+    	if(info.path.size()>=moduleStart+1){
+    		req.setModule(info.path.get(moduleStart));
+    	}
+    	if(info.path.size()>=moduleStart+2){
+    		req.setMethod(info.path.get(moduleStart+1));
+    	} 
+    	
+    	int paramStart = moduleStart+2;
+    	if(info.path.size()>paramStart){
+    		Object[] params = new Object[info.path.size()-(paramStart)];
+    		for(int i=0;i<params.length;i++){
+    			params[i] = info.path.get(paramStart+i);
+    		}
+    		req.setParams(params); 
+    	}   
+    	return req;
+	}
 	public Request decodeRequest(Message msg) {
 		String encoding = msg.getEncoding();
 		if(encoding == null){
 			encoding = DEFAULT_ENCODING;
 		}
-		String jsonString = msg.getBodyString(encoding);
-		Request req = JsonKit.parseObject(jsonString, Request.class);
-		Request.normalize(req); 
-		return req;
-	}
-
-	
-	public Message encodeResponse(Response response, String encoding) {
-		Message msg = new Message();  
-		msg.setStatus(200);
-		msg.setEncoding(encoding); 
-		if(encoding == null) encoding = DEFAULT_ENCODING;  
-		String json;
-		if(response.getError() != null){
-			json = String.format("{\"error\": %s}", JsonKit.toJSONStringWithTykpe(response.getError(), encoding));
-		} else {
-			json = String.format("{\"result\": %s}", JsonKit.toJSONStringWithTykpe(response.getResult(), encoding));
+		String contentType = msg.getHeader(Message.CONTENT_TYPE);
+		if(contentType != null && contentType.startsWith(Message.CONTENT_TYPE_UPLOAD)){
+			return decodeUpload(msg);
 		} 
-		msg.setBody(json); 
+		
+		String jsonString = msg.getBodyString(encoding);
+		return JsonKit.parseObject(jsonString, Request.class);  
+	} 
+	
+	public Message encodeResponse(Object response, String encoding) {
+		Message msg = new Message();   
+		if(encoding == null) encoding = DEFAULT_ENCODING;  
+		msg.setEncoding(encoding);  
+		if(responseTypeInfo) {
+			msg.setBody(JsonKit.toJSONBytesWithType(response, encoding)); 
+		} else {
+			msg.setBody(JsonKit.toJSONBytes(response, encoding));
+		} 
+		String contentType = "application/json";
+		msg.setHeader("content-type", contentType);
 		return msg; 
 	}
 	
  
-	public Response decodeResponse(Message msg){ 
+	public Object decodeResponse(Message msg){ 
 		String encoding = msg.getEncoding();
 		if(encoding == null){
 			encoding = DEFAULT_ENCODING;
 		}
 		String jsonString = msg.getBodyString(encoding);
-		Response res = null;
+		Object res = null; 
 		try{
-			res = JsonKit.parseObject(jsonString, Response.class);
-		} catch (Exception e){ //probably error can not be instantiated
-			res = new Response(); 
-			Map<String, Object> json = null;
+			res = JsonKit.parseObject(jsonString, Object.class);
+		} catch (Exception e){  
 			try{
-				jsonString = jsonString.replace("@type", "@class"); //disable desearialization by class name
-				json = JsonKit.parseObject(jsonString); 
+				jsonString = jsonString.replace("@type", "@class"); //trick: disable desearialization by class name
+				res = JsonKit.parseObject(jsonString); 
 			} catch(Exception ex){
 				String prefix = "";
 				if(msg.getStatus() == 200){ 
 					prefix = "JSON format invalid: ";
 				}
 				throw new RpcException(prefix + jsonString);
-			} 
-			if(json != null){  
-				if(json.containsKey("error") && json.get("error") != null){ 
-					throw new RpcException(json.get("error").toString());
-				}
-				res.setResult(json.get("result"));
-			}
+			}  
 		} 
 		return res;
 	} 
