@@ -1,187 +1,61 @@
 package io.zbus.mq;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
-import io.zbus.transport.ServerAddress; 
+public interface Protocol {  
+	//Parameter keys(Message main key-value pairs)
+	public static final String CMD       = "cmd";       // Request message command
+	public static final String STATUS    = "status";    // Response message status
+	public static final String ID        = "id";        // Message ID
+	public static final String BODY      = "body";      // Message body 
+	public static final String API_KEY   = "apiKey";    // Authentication public Key
+	public static final String SIGNATURE = "signature"; // Authentication signature generated
+	
+	//Command values(key=cmd)
+	public static final String PUB    = "pub";      //Publish message
+	public static final String SUB    = "sub";      //Subscribe message stream
+	public static final String TAKE   = "take";     //One-time read message from MQ 
+	public static final String ROUTE  = "route";    //Route message to specified sender client
+	public static final String CREATE = "create";   //Create or Update
+	public static final String REMOVE = "remove";   //Remove MQ/Channel
+	public static final String QUERY  = "query";    //Query MQ/Channel
+	public static final String BIND   = "bind";     //Bind URL mapping to MQ message(Make browser friendly)
+	public static final String PING   = "ping";     //Heartbeat ping
+	
+	//Parameter keys(for commands)
+	public static final String MQ             = "mq";  
+	public static final String CHANNEL        = "channel";  
+	public static final String FILTER         = "filter";    //Filter on message's tag
+	public static final String TAG            = "tag";       //Tag of message, if filter applied
+	public static final String OFFSET         = "offset";
+	public static final String CHECKSUM       = "checksum";  //Offset checksum
+	public static final String SOURCE         = "source";    //message's source id(socket)
+	public static final String TARGET         = "target";    //route message's target id(socket)
+	public static final String MQ_TYPE        = "mqType";  
+	public static final String MQ_MASK        = "mqMask";  
+	public static final String CHANNEL_MASK   = "channelMask"; 
+	public static final String WINDOW         = "window";
+	public static final String ACK            = "ack";  
+	public static final String CLEAR_BIND     = "clearBind";  
+	
+	//Parameter mqType values
+	public static final String MEMORY  = "memory";  
+	public static final String DISK    = "disk";  
+	public static final String DB      = "db";  
+	
+	public static class MqInfo {   
+		public String name; 
+		public Integer mask; 
+		public long size;
+		public String type;
+		public List<ChannelInfo> channels; 
+	}
 
-public class Protocol {  
-	public static final String VERSION_VALUE = "0.11.4";      
-	
-	//=============================[1] Command Values================================================
-	//MQ Produce/Consume
-	public static final String PRODUCE       = "produce";   
-	public static final String CONSUME       = "consume";   
-	public static final String UNCONSUME     = "unconsume"; //leave consume status
-	public static final String ACK           = "ack";
-	public static final String ROUTE   	     = "route";     //route back message to sender
-	
-	//Topic control
-	public static final String DECLARE = "declare";  
-	public static final String QUERY   = "query"; 
-	public static final String REMOVE  = "remove";
-	public static final String EMPTY   = "empty";   
-	
-	//High Availability (HA) 
-	public static final String TRACK_PUB   = "track_pub"; 
-	public static final String TRACK_SUB   = "track_sub";  
-	public static final String TRACKER     = "tracker";  
-	public static final String SERVER      = "server";  
-	
-	//SSL/TLS
-	public static final String SSL         = "ssl"; 
-	
-	
-	public static final String LOGIN       = "login"; 
-	public static final String LOGOUT      = "logout";  
-	public static final String HOME        = "home";
-	public static final String JS          = "js";      
-	public static final String CSS         = "css";      
-	public static final String IMG         = "img"; 
-	public static final String PAGE        = "page";     
-	
-	//Test connection
-	public static final String PING        = "ping";    //ping server, returning back server time  
-	
-	public static final String HEARTBEAT   = "heartbeat";  
-	
-	//=============================[2] Parameter Values================================================
-	public static final String VERSION              = "version";
-	public static final String COMMAND       		= "cmd";     
-	public static final String TOPIC         		= "topic";
-	public static final String TOPIC_MASK          	= "topic_mask"; 
-	public static final String TAG   	     		= "tag";  
-	public static final String OFFSET        		= "offset";
-	
-	public static final String CONSUME_GROUP        = "consume_group";  
-	public static final String GROUP_NAME_AUTO      = "group_name_auto";  
-	public static final String GROUP_START_COPY     = "group_start_copy";  
-	public static final String GROUP_START_OFFSET   = "group_start_offset";
-	public static final String GROUP_START_MSGID    = "group_start_msgid"; 
-	public static final String GROUP_START_TIME     = "group_start_time";   
-	public static final String GROUP_FILTER         = "group_filter";  
-	public static final String GROUP_MASK           = "group_mask"; 
-	public static final String GROUP_ACK_WINDOW     = "group_ack_window"; 
-	public static final String GROUP_ACK_TIMEOUT    = "group_ack_timeout";
-	
-	public static final String CONSUME_WINDOW       = "consume_window";  
-	
-	public static final String SENDER   			= "sender"; 
-	public static final String RECVER   			= "recver";
-	public static final String ID      				= "id";	
-	public static final String TIMESTAMP      	    = "timestamp";	//timestamp when message saved in broker
-	public static final String RETRY      	        = "retry";	    //NAK message retry count
-	
-	public static final String HOST   			    = "host";   
-	public static final String ENCODING 			= "encoding"; 
-	
-	public static final String ORIGIN_ID     		= "origin_id";
-	public static final String ORIGIN_URL   		= "origin_url";
-	public static final String ORIGIN_METHOD   		= "origin_method";
-	public static final String ORIGIN_STATUS 		= "origin_status";
-	
-	//Security  
-	public static final String TOKEN   				= "token";  
-	
-	public static final int MASK_DISK    	    = 0;
-	public static final int MASK_MEMORY    	    = 1<<0;
-	public static final int MASK_RPC    	    = 1<<1;
-	public static final int MASK_PROXY    	    = 1<<2; 
-	public static final int MASK_PAUSE    	    = 1<<3;  
-	public static final int MASK_EXCLUSIVE 	    = 1<<4;  
-	public static final int MASK_DELETE_ON_EXIT = 1<<5; 
-	public static final int MASK_ACK_REQUIRED   = 1<<6; 
-	
-	
-	public static class ServerEvent{  
-		//public ServerAddress serverAddress;
-		public ServerInfo serverInfo;
-		public String certificate;
-		public boolean live = true;  
-	}
-	 
-	
-	public static class TrackItem implements Cloneable{
-		public ServerAddress serverAddress;  
-		public String serverVersion = VERSION_VALUE;  
-		public Exception error; //current item error encountered
-		
-		public TrackItem clone() { 
-			try {
-				return (TrackItem)super.clone();
-			} catch (CloneNotSupportedException e) {
-				return null;
-			}
-		}
-	}
-	
-	public static class TrackerInfo extends TrackItem {
-		public long infoVersion; 
-		public Map<String, ServerInfo> serverTable;
-		
-		public TrackerInfo clone() {  
-			return (TrackerInfo)super.clone();  
-		}
-	}
-	  
-	public static class ServerInfo extends TrackItem {    
-		public long infoVersion;
-		public List<ServerAddress> trackerList;  
-		public Map<String, TopicInfo> topicTable = new ConcurrentHashMap<String, TopicInfo>(); 
-		
-		public ServerInfo clone() { 
-			return (ServerInfo)super.clone();   
-		}
-	}
-	
-	public static class TopicInfo extends TrackItem { 
-		public String topicName;
-		public int mask; 
-		
-		public long messageDepth; //message count on disk
-		public int consumerCount; //total consumer count in consumeGroupList
-		public List<ConsumeGroupInfo> consumeGroupList = new ArrayList<ConsumeGroupInfo>();
-		
-		public String creator;
-		public long createdTime;
-		public long lastUpdatedTime;   
-		
-		public ConsumeGroupInfo consumeGroup(String name){
-			if(consumeGroupList == null) return null;
-			for(ConsumeGroupInfo info : consumeGroupList){
-				if(name.equals(info.groupName)) return info;
-			}
-			return null;
-		}
-		
-		public TopicInfo clone() { 
-			return (TopicInfo)super.clone();  
-		}
-	}  
-	
-	public static class ConsumeGroupInfo implements Cloneable{ 
-		public String topicName;
-		public String groupName;
-		public int mask; 
+	public static class ChannelInfo {   
+		public String name; 
+		public Integer mask;  
 		public String filter;
-		public long messageCount;
-		public int consumerCount;
-		public List<String> consumerList = new ArrayList<String>();
-		
-		public String creator;
-		public long createdTime;
-		public long lastUpdatedTime;  
-		
-		public Exception error; //used only for batch operation indication
-		
-		public ConsumeGroupInfo clone() { 
-			try {
-				return (ConsumeGroupInfo)super.clone();
-			} catch (CloneNotSupportedException e) {
-				return null;
-			}
-		}
-	}  
+		public long offset;
+	}
+	
 }

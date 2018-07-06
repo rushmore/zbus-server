@@ -28,10 +28,27 @@ import java.util.List;
 import java.util.Map;
 
 public class HttpKit {
-
-	public static class UrlInfo {
-		public List<String> path = new ArrayList<String>();
-		public Map<String, String> params = new HashMap<String, String>(); 
+	private final static Map<String, String> MIME_TYPES = new HashMap<>(); 
+	
+	public static class UrlInfo { 
+		public List<String> pathList = new ArrayList<String>();
+		public Map<String, String> queryParamMap = new HashMap<String, String>(); 
+		
+		public String urlPath;
+		public String queryParamString; 
+	} 
+	
+	public static String joinPath(String... paths) {
+		String url = "/";
+		for(String p : paths) {
+			if(p == null) continue;
+			url += "/"+p;
+		}   
+		url = url.replaceAll("[/]+", "/"); 
+        if(url.endsWith("/") && url.length()>1) {
+        	url = url.substring(0, url.length()-1);
+        } 
+		return url;
 	}
 	
 	public static UrlInfo parseUrl(String url){
@@ -42,70 +59,47 @@ public class HttpKit {
     	String path = url;
     	String params = null;
     	int idx = url.indexOf('?');
+    	info.urlPath =  url;
     	if(idx >= 0){
-    		path = url.substring(0, idx);  
-    		params = url.substring(idx+1);
+    		info.urlPath = path = url.substring(0, idx);  
+    		info.queryParamString = params = url.substring(idx+1);
     	} 
     	String[] bb = path.split("/");
     	for(String b : bb){
     		if(StrKit.isEmpty(b)) continue;
-    		info.path.add(b);
+    		info.pathList.add(b);
     	}
     	
     	if(params != null){
-    		info.params = StrKit.kvp(params, "&");
+    		info.queryParamMap = StrKit.kvp(params, "&");
     	} 
 		return info;
 	}
 	
-	public static String rpcUrl(String url, boolean hasTopic){
-		String[] bb = url.split("[/]");
-		String resource = "";
-		int count = 0;
-		int prefixCount = 3;
-		if(hasTopic) prefixCount = 4;
-		for(int i=0;i<bb.length;i++){
-			if(bb[i].equals("")) continue;
-			count++;
-			if(count<prefixCount) continue;
-			resource += bb[i];
-			if(i<bb.length-1) resource+= "/";
-		}
-		return resource;
-	}
-	
 	public static String contentType(String resource){
-		if(resource.endsWith(".js")) {
-			return "application/javascript";
-		} 
-		if(resource.endsWith(".css")) {
-			return "text/css";
-		} 
-		if(resource.endsWith(".htm") || resource.endsWith(".html")){ 
-			return "text/html";
+		int idx = resource.lastIndexOf('.');
+		if(idx < 0) {
+			return null;
 		}
-		if(resource.endsWith(".svg")){
-			return "image/svg+xml";
-		} 
-		if(resource.endsWith(".gif")){
-			return "image/gif";
-		}
-		if(resource.endsWith(".jpeg")){
-			return "image/jpeg";
-		}
-		if(resource.endsWith(".ico")){
-			return "image/x-icon";
-		}  
-		if(resource.endsWith(".png")){
-			return "image/png";
-		}  
-		if(resource.endsWith(".pdf")){
-			return "application/pdf";
-		}  
-		if(resource.endsWith(".zip")){
-			return "application/zip";
-		}  
-		
-		return null; 
+		String mimeType = resource.substring(idx+1);
+		return MIME_TYPES.get(mimeType); 
 	}
+	 
+	static { 
+		MIME_TYPES.put("js", "application/javascript"); 
+		MIME_TYPES.put("css", "text/css"); 
+		MIME_TYPES.put("htm", "text/html"); 
+		MIME_TYPES.put("html", "text/html"); 
+		MIME_TYPES.put("svg", "image/svg+xml"); 
+		MIME_TYPES.put("gif", "image/gif"); 
+		MIME_TYPES.put("jpeg", "image/jpeg"); 
+		MIME_TYPES.put("jpg", "image/jpg"); 
+		MIME_TYPES.put("ico", "image/x-icon"); 
+		MIME_TYPES.put("png", "image/png"); 
+		MIME_TYPES.put("pdf", "application/pdf");   
+		MIME_TYPES.put("zip", "application/zip");   
+		MIME_TYPES.put("ttf", "application/x-font-ttf");  
+		MIME_TYPES.put("eot", "font/opentype");   
+	}
+	 
 }

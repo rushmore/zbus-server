@@ -2,13 +2,18 @@ package io.zbus.kit;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class StrKit {
-
+	
+	public static String uuid(){
+		return UUID.randomUUID().toString();
+	}
+	
 	public static boolean isEmpty(String str) {
 		return str == null || str.trim().equals(""); 
 	}
-
+	
 	public static Map<String, String> kvp(String value){
 		return StrKit.kvp(value, "&");
 	}

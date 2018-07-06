@@ -3,8 +3,8 @@ ECHO OFF
 REM SET JAVA_HOME=D:\SDK\jdk6_x64
 
 SET ZBUS_HOME=..
-SET JAVA_OPTS=-server -Xms64m -Xmx1024m -XX:+UseParallelGC
-SET MAIN_CLASS=io.zbus.mq.server.MqServer
+SET JAVA_OPTS=-server -Dfile.encoding=UTF-8 -Xms64m -Xmx1024m -XX:+UseParallelGC
+SET MAIN_CLASS=io.zbus.mq.MqServer
 
 IF "%1" == "" ( 
 	SET MAIN_OPTS=-conf ../conf/zbus.xml 

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zbus>   <!-- public/private/monitor address configuration -->
+	
+	<!-- address open to public, with ssl and auth secured if configured --> 
+	<public>
+		<address>0.0.0.0:80</address> <!-- empty to disable -->
+		<sslEnabled certFile="ssl/zbus.crt" keyFile="ssl/zbus.key">false</sslEnabled> 
+		
+		<!--  use embedded auth -->  
+		<auth>
+			<add>
+				<apiKey>2ba912a8-4a8d-49d2-1a22-198fd285cb06</apiKey>
+				<secretKey>461277322-943d-4b2f-b9b6-3f860d746ffd</secretKey> 
+			</add>  
+			<add>
+				<apiKey>3ba912a6-4a8d-49d1-1a66-198ea285cb03</apiKey>
+				<secretKey>123475622-953d-4b2f-a7b6-4f860d126cce</secretKey> 
+			</add>  
+		</auth>  
+		
+	</public>  
+	
+	<!-- address with no ssl and auth, only for private, speed and convenient -->
+	<private>
+		<address>0.0.0.0:15555</address> 
+	</private> 
+	
+	<!-- address for monitor -->
+	<monitor>	
+		<address>0.0.0.0:25555</address>
+		<!-- 
+		<auth>
+			<add>
+				<apiKey>2ba912a8-4a8d-49d2-1a22-198fd285cb06</apiKey>
+				<secretKey>461277322-943d-4b2f-b9b6-3f860d746ffd</secretKey> 
+			</add>  
+			<add>
+				<apiKey>3ba912a6-4a8d-49d1-1a66-198ea285cb03</apiKey>
+				<secretKey>123475622-953d-4b2f-a7b6-4f860d126cce</secretKey> 
+			</add>  
+		</auth>  
+		-->  
+	</monitor> 
+ 	
+ 	
+	<!-- MQ location configure -->
+	<mqDiskDir>/tmp/zbus</mqDiskDir>   
+	<mqDbUrl></mqDbUrl>   
+	<maxSocketCount>102400</maxSocketCount>   
+	<packageSizeLimit>128M</packageSizeLimit>   
+	<verbose>true</verbose>  
+</zbus>
+

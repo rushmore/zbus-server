@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zbus> 
+	<auth>
+		<add>
+			<apiKey>2ba912a8-4a8d-49d2-1a22-198fd285cb06</apiKey>
+			<secretKey>461277322-943d-4b2f-b9b6-3f860d746ffd</secretKey> 
+		</add>  
+		<add>
+			<apiKey>3ba912a6-4a8d-49d1-1a66-198ea285cb03</apiKey>
+			<secretKey>123475622-953d-4b2f-a7b6-4f860d126cce</secretKey> 
+		</add>  
+	</auth>   
+</zbus>
+

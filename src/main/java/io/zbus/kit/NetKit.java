@@ -150,12 +150,15 @@ public class NetKit {
 	}
 
 	public static Object[] hostPort(String address){
+		return hostPort(address, 80);
+	}
+	public static Object[] hostPort(String address, int defaultPort){
 		Object[] res = new Object[2];
 		String[] bb = address.split("[:]",2);
 		if(bb.length > 0){
 			res[0] = bb[0].trim();
 		}
-		res[1] = 80;
+		res[1] = defaultPort;
 		if(bb.length>1){
 			res[1] = Integer.valueOf(bb[1]); 
 		}

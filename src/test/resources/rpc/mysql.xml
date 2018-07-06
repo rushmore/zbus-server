@@ -1,0 +1,29 @@
+<beans 
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans-4.3.xsd
+		http://www.springframework.org/schema/jdbc     
+		http://www.springframework.org/schema/jdbc/spring-jdbc-4.3.xsd"> 
+
+ 	<bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource">
+		<property name="url" value="jdbc:mysql://localhost:3306/mysql?useSSL=false"/>    
+		<property name="username" value="root"/>
+		<property name="password" value="root"/>
+		<property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+		<property name="initialSize" value="10"/>
+		<property name="maxActive" value="100"/>
+		<property name="minIdle" value="0"/>
+		<property name="timeBetweenEvictionRunsMillis" value="60000"/>
+		<property name="minEvictableIdleTimeMillis" value="300000"/>
+		<property name="validationQuery" value="select 1"/>
+		<property name="testWhileIdle" value="true"/>
+		<property name="testOnBorrow" value="false"/>
+		<property name="testOnReturn" value="false"/>
+		<property name="sharePreparedStatements" value="false"/>
+	</bean> 
+	
+</beans>

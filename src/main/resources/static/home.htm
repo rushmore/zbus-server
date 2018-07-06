@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+<title>zbus = mq + rpc</title>
+<script type="text/javascript" src="/static/jquery.js"></script>
+<script type="text/javascript" src="/static/jquery-ui.js"></script>
+<script type="text/javascript" src="/static/bootstrap.js"></script>
+<script type="text/javascript" src="/static/base.js"></script>
+<script type="text/javascript" src="/static/zbus.js"></script>
+<link rel="stylesheet" href="/static/bootstrap.css" type="text/css">
+<link rel="stylesheet" href="/static/base.css" type="text/css">
+
+</head>
+<body> 
+
+<script type="text/javascript">  
+ 
+
+</script>
+
+<div class="header">
+
+<nav class="navbar navbar-inverse navbar-static-top">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>  
+            
+            <a class="navbar-brand" href="/">  
+                <img src="/static/logo.svg" />
+                <span id="symbol">zbus</span> 
+            </a> 
+            
+        </div>
+        <div class="collapse navbar-collapse" id="navbar">
+             <ul class="nav navbar-nav">  
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+                <li><a target="_blank" href="http://zbus.io/">Offical Site</a></li>
+                <li><a target="_blank" href="http://git.oschina.net/rushmore/zbus">Source Code</a></li> 
+                <li class="hidden-xs"><p class="navbar-text"><span class="label label-success" id="version"></span></p></li>
+            	<li id="logout"><a href='?cmd=logout'><span></span> Logout</a></li>
+            </ul> 
+        </div>
+    </div>
+</nav>
+</div>
+ 
+<div class="nodes container-fluid" style="margin-bottom:30px;">   
+  
+  
+<div class="row">
+    <div class="col-md-12">
+        <div class="cap"><span class="label label-primary">Message Queues</span></div> <div class="op2"><a class='topic' data-toggle='modal' data-target='#add-topic-modal'>&#43;</a></div>
+    </div>
+</div> 
+ 
+
+<div class="row">
+    <div class="col-md-12 table-responsive">
+        <table id="topic-list" class="table-outter tgroup"> 
+			<tbody>  
+				<tr class="header-ctrl">
+					<td><div class="td">MQ Name</div></td>
+					<td>
+						<table class="table-nested sgroup">
+							<tr> 
+								<td><div class="td">Message Depth</div></td> 
+								<td>
+									<table class="table-nested cgroup">
+									<tr>
+										<td><div class="td">Channel</div></td>
+										<td><div class="td">Message Active</div></td> 
+										<td><div class="td">Consuming Clients</div></td> 
+										<td><div class="td">Filter Topic</div></td>  
+									</tr> 
+								</table>  
+								</td> 
+							</tr> 
+						</table> 
+					</td>
+				</tr>
+				<!-- body --> 
+				
+			</tbody>
+		</table>
+    </div>
+</div>
+
+ 
+
+</div> 
+
+
+<div id="add-topic-modal" class="modal"  tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg add-topic-modal" role="document">
+    <div class="modal-content"> 
+    	<div class="modal-header"> 
+    		<div class="caption"><span id="add-topic-caption"></span> 
+    		</div>  
+    		<div class="close-box"><span class="topic label label-info" data-dismiss="modal" aria-label="Close">x</span></div>
+     	</div>      
+        <div class="add-topic-content"> 
+            <div>
+                <span>Topic:</span> 
+                <input type="text" class="topic-item" id="topic-name" value="" class="text">
+            </div> 
+            <div>
+                <span>Mask:</span> 
+                <input type="text" class="topic-item" id="topic-mask" placeholder="optional" value="" class="text">  
+                <button onclick="mqDeclare()">Declare</button>
+            </div> 
+            <hr />
+            <span>Servers:</span> 
+            <div class="target-server-list">  
+            </div>
+        </div>
+    </div>
+  </div>
+</div>
+
+
+<div id="remove-topic-modal" class="modal"  tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg add-topic-modal" role="document">
+    <div class="modal-content"> 
+    	<div class="modal-header"> 
+    		<div class="caption"><span id="remove-topic-caption"></span> 
+    		</div>  
+    		<div class="close-box"><span class="topic label label-info" data-dismiss="modal" aria-label="Close">x</span></div>
+     	</div>  
+        <div class="add-topic-content">  
+            <div> 
+                <input id="remove-topic-name" value="" type="hidden"/>
+                <button class="btn btn-danger" onclick="mqRemove()">Delete</button>
+            </div> 
+            <hr />
+            <span>Servers:</span> 
+            <div class="target-server-list">  
+            </div>
+        </div>
+    </div>
+  </div>
+</div>
+ 
+<script type="text/javascript">  
+
+</script> 
+
+</body>
+
+</html>

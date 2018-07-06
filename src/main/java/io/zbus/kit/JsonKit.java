@@ -1,6 +1,8 @@
 package io.zbus.kit;
 
 import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import com.alibaba.fastjson.JSON;
@@ -17,6 +19,26 @@ public class JsonKit {
 		return JSON.parseObject(jsonString);
 	} 
 	
+	public static Map<String, Object> parseObject(byte[] bytes) {
+		String string;
+		try {
+			string = new String(bytes, DEFAULT_ENCODING);
+		} catch (UnsupportedEncodingException e) {
+			string = new String(bytes);
+		}
+		return JSON.parseObject(string);
+	} 
+	
+	public static <T> T parseObject(byte[] bytes, Class<T> clazz) {
+		String string;
+		try {
+			string = new String(bytes, DEFAULT_ENCODING);
+		} catch (UnsupportedEncodingException e) {
+			string = new String(bytes);
+		}
+		return JSON.parseObject(string, clazz);
+	} 
+	
 	public static <T> T parseObject(String jsonString, Class<T> clazz) {
 		try{
 			return JSON.parseObject(jsonString, clazz);
@@ -28,20 +50,41 @@ public class JsonKit {
 	
 	@SuppressWarnings("unchecked")
 	public static <T> T convert(Object json, Class<T> clazz) { 
-		if(json == null){ //fix zbus-java bug#1 
+		if(json == null){ 
 			return null;
 		}
 		if(clazz.isAssignableFrom(json.getClass())){ 
 			return (T)json;
+		} 
+		String jsonString = null;
+		if(json instanceof String) {
+			jsonString = (String)json;
+		} else if (json instanceof byte[]) {
+			return parseObject((byte[])json, clazz);
+		} else {
+			jsonString = JSON.toJSONString(json);
 		}
-		if(json instanceof JSONObject){
-			JSONObject jsonObject = (JSONObject)json;
-			return jsonObject.toJavaObject(clazz);
+		try {
+			return parseObject(jsonString, clazz);
+		} catch (JSONException e) {
+			return parseObject(fixJson(jsonString), clazz);
 		}
-		
-		String jsonString = JSON.toJSONString(json);
-		return parseObject(jsonString, clazz);
 	} 
+	
+	@SuppressWarnings("unchecked")
+	public static <T> List<T> convertList(Object json, Class<T> clazz) { 
+		List<Object> list = convert(json, List.class); 
+		List<T> res = new ArrayList<>();
+		for(Object obj : list) {
+			res.add(convert(obj, clazz));
+		}
+		return res;
+	} 
+	
+	public static <T> T get(JSONObject json, String key, Class<T> clazz) { 
+		Object object = json.get(key);
+		return convert(object, clazz);
+	}
 	
 	public static String toJSONString(Object value) {
 		return toJSONString(value,DEFAULT_ENCODING);
@@ -54,28 +97,17 @@ public class JsonKit {
 		} catch (UnsupportedEncodingException e) {
 			return new String(data);
 		}
-	}
+	}  
 	
-	public static String toJSONStringWithType(Object value, String encoding) {
-		byte[] data = toJSONBytesWithType(value, encoding);
-		try {
-			return new String(data, encoding);
-		} catch (UnsupportedEncodingException e) {
-			return new String(data);
-		}
-	}
+	public static byte[] toJSONBytes(Object value) { 
+		return toJSONBytes(value, "utf8");
+	} 
+	
 	
 	public static byte[] toJSONBytes(Object value, String encoding) {
-		return toJSONBytes(value, encoding, 
-				//SerializerFeature.WriteMapNullValue, 
+		return toJSONBytes(value, encoding,   
 				SerializerFeature.DisableCircularReferenceDetect); 
-	} 
-	
-	public static byte[] toJSONBytesWithType(Object value, String encoding) {
-		return toJSONBytes(value, encoding, 
-				SerializerFeature.DisableCircularReferenceDetect,
-				SerializerFeature.WriteClassName); 
-	} 
+	}  
 	
 	
 	private static final byte[] toJSONBytes(Object object, String charsetName,
@@ -98,5 +130,23 @@ public class JsonKit {
 		} finally {
 			out.close();
 		}
-	}
+	}  
+	
+	public static String fixJson(String str){
+		if(!str.startsWith("{")) {
+			str = "{" + str + "}";
+		} 
+		str = str.replace(" ", "");
+		str = str.replace(":", "':'");
+		str = str.replace(",", "','");
+		str = str.replace("{", "{'");
+		str = str.replace("}", "'}");
+		str = str.replace("[", "['");
+		str = str.replace("]", "']"); 
+		str = str.replace("'[", "[");
+		str = str.replace("]'", "]");
+		str = str.replace("'{", "{");
+		str = str.replace("}'", "}");
+		return str;
+	} 
 } 

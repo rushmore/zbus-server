@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+<title>{{urlPrefix}} Java</title>  
+
+<style type='text/css'>
+body {
+    font-family: -apple-system,system-ui,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #292b2c;
+    background-color: #fff;
+    margin: 0px;
+    padding: 0px;
+}
+table {  background-color: transparent;  display: table; border-collapse: separate;  border-color: grey; }
+.table { width: 100%; max-width: 100%;  margin-bottom: 1rem; }
+.table th {  height: 30px; }
+.table td, .table th {    border-bottom: 1px solid #eceeef;   text-align: left; padding-left: 16px;}
+th.urlPath {  width: 10%; } 
+th.returnType {  width: 10%; }
+th.methodParams {   width: 80%; } 
+td.returnType { text-align: right; }
+thead { display: table-header-group; vertical-align: middle; border-color: inherit;}
+tbody { display: table-row-group; vertical-align: middle; border-color: inherit;}
+tr { display: table-row;  vertical-align: inherit; border-color: inherit; }
+.table-info, .table-info>td, .table-info>th { background-color: #dff0d8; }
+.url { margin: 4px 0; padding-left: 16px;}
+</style>   
+</head>
+<body>     
+
+<script type="text/javascript">
+{{zbusjs}}
+
+const rpc = new RpcClient(null, '{{urlPrefix}}');
+
+
+</script> 
+
+<div> 
+<div class="url">
+    <span>URL={{urlPrefix}}/[module]/[method]/[param1]/[param2]/...</span> 
+</div>
+<table class='table'>
+<thead>
+<tr class='table-info'>
+	<th class='urlPath'>URL Path</th> 
+    <th class='returnType'>Return Type</th>
+    <th class='methodParams'>Method and Params</th> 
+</tr>
+<thead>
+<tbody> 
+{{content}} 
+</tbody></table> 
+	 
+</div>  
+
+</body> 
+</html>

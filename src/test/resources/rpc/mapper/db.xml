@@ -1,0 +1,9 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="io.zbus.rpc.biz.db"> 
+
+	<select id="test" resultType="Map">
+		SELECT name, url, example FROM help_topic limit 10
+	</select> 
+	
+</mapper>
