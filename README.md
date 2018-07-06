@@ -47,23 +47,23 @@ Maven
 ## Tutorials
 
 ### MQ Tutorial
-[js](https://gitee.com/rushmore/zbus-js)
+[js](https://github.com/rushmore/zbus-js)
 
-[python](https://gitee.com/rushmore/zbus-python)
+[python](https://github.com/rushmore/zbus-python)
 
-[java](https://gitee.com/rushmore/zbus)
+[java](https://github.com/rushmore/zbus)
 
-[dotnet](https://gitee.com/rushmore/zbus-dotnet)
+[dotnet](https://github.com/rushmore/zbus-dotnet)
 
 
 ### RPC Tutorial
-[js](https://gitee.com/rushmore/zbus-js)
+[js](https://github.com/rushmore/zbus-js)
 
-[python](https://gitee.com/rushmore/zbus-python)
+[python](https://github.com/rushmore/zbus-python)
 
-[java](https://gitee.com/rushmore/zbus)
+[java](https://github.com/rushmore/zbus)
 
-[dotnet](https://gitee.com/rushmore/zbus-dotnet)
+[dotnet](https://github.com/rushmore/zbus-dotnet)
 
 
 ## High Level Diagram
