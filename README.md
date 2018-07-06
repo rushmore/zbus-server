@@ -25,13 +25,13 @@ zbus carefully designed on its protocol and components to embrace KISS(Keep It S
 
  ## Offical Clients
 
-[zbus-js](https://gitee.com/rushmore/zbus-js)
+[zbus-js](https://github.com/rushmore/zbus-js)
 
-[zbus-python](https://gitee.com/rushmore/zbus-python)
+[zbus-python](https://github.com/rushmore/zbus-python)
 
-[zbus-java](https://gitee.com/rushmore/zbus) [javadoc](https://apidoc.gitee.com/rushmore/zbus)
+[zbus-java](https://github.com/rushmore/zbus)
 
-[zbus-dotnet](https://gitee.com/rushmore/zbus-dotnet)
+[zbus-dotnet](https://github.com/rushmore/zbus-dotnet)
 
 ## How to start zbus server 
 In zbus-dist directory, just run zbus.bat/sh, JDK8+ required. 
